@@ -1461,9 +1461,11 @@ namespaces = {
     }
 }
 
-# Load embedding model for semantic retrieval
+# Load embedding model for semantic retrieval (offline mode)
 print("[SYSTEM] Loading embedding model for tool retrieval...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+os.environ['TRANSFORMERS_OFFLINE'] = '1'  # Force offline mode - no internet checks
+os.environ['HF_HUB_OFFLINE'] = '1'  # Disable HuggingFace Hub access
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')  # Use cached model only
 
 # Pre-compute namespace embeddings
 namespace_names = list(namespaces.keys())

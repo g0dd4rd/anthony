@@ -58,9 +58,12 @@ namespaces = {
     }
 }
 
-# Load model
+# Load model (offline mode - no internet needed)
 print("Loading embedding model...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+import os
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
+os.environ['HF_HUB_OFFLINE'] = '1'
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
 
 # Pre-compute namespace embeddings
 namespace_names = list(namespaces.keys())
