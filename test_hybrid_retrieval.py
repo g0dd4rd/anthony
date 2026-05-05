@@ -13,7 +13,7 @@ import torch
 # Define namespaces (same as in orchestrator)
 namespaces = {
     "app": {
-        "description": "Launching applications, managing installed apps, application control",
+        "description": "Start, open, launch, run applications and programs - text editor, terminal, calculator, browser, settings, files manager. Opening programs, starting software, running apps (Firefox, Text Editor, Calculator, Terminal, Files, Settings).",
         "tools": ["launch_application", "list_installed_applications"]
     },
     "file": {

@@ -365,7 +365,7 @@ def describe_desktop() -> str:
         print(f"[SYSTEM] ⏳ Please wait...")
 
         response = ollama.chat(
-            model='llama3.2-vision:11b',
+            model='gemma4:e4b',
             messages=[
                 {
                     'role': 'system',
@@ -1422,7 +1422,7 @@ direct_mcp_tools = [
 # Each namespace groups related tools with a description used for retrieval
 namespaces = {
     "app": {
-        "description": "Launching applications, managing installed apps, application control",
+        "description": "Start, open, launch, run applications and programs - text editor, terminal, calculator, browser, settings, files manager. Opening programs, starting software, running apps (Firefox, Text Editor, Calculator, Terminal, Files, Settings).",
         "tools": ["launch_application", "list_installed_applications"]
     },
     "file": {
@@ -2110,7 +2110,8 @@ def run_agent():
                     keep_alive=-1,
                     options={
                         'temperature': 0.0,
-                        'top_p': 0.1
+                        'top_p': 0.1,
+                        'num_predict': 200  # Limit tokens - function calls are short (<100 tokens)
                     }
                 )
 
