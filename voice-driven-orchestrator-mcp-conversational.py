@@ -1421,16 +1421,12 @@ direct_mcp_tools = [
 # Define tool namespaces with semantic descriptions
 # Each namespace groups related tools with a description used for retrieval
 namespaces = {
-    "app": {
-        "description": "Start, open, launch, run applications and programs - text editor, terminal, calculator, browser, settings, files manager. Opening programs, starting software, running apps (Firefox, Text Editor, Calculator, Terminal, Files, Settings).",
-        "tools": ["launch_application", "list_installed_applications"]
-    },
-    "file": {
-        "description": "Opening files and web pages - visit websites, go to URLs, browse internet (google.com, amazon.com, github.com, seznam.cz). Open existing files by filename or path (PDFs, images, screenshots, documents). Search for files in folders (Pictures, Documents, Downloads).",
-        "tools": ["open_file", "open_url", "search_files"]
+    "search": {
+        "description": "Launch applications, start programs, open files, navigate to websites. Commands like: open firefox, open text editor, start calculator, launch terminal, run files app. Open documents: open screenshot.png, open document.pdf, find image.jpg. Web navigation: go to amazon.com, visit github.com, browse seznam.cz, open google.com. Settings: open wifi settings, bluetooth settings. Use GNOME search to find and launch anything.",
+        "tools": ["gnome_search"]
     },
     "window": {
-        "description": "Window management - maximize, minimize, close, focus, move, resize, restore windows. List currently open windows.",
+        "description": "Managing already running windows - maximize, minimize, close, focus, move, resize, restore existing application windows. List what windows are currently running. NOT for launching new applications.",
         "tools": ["list_open_windows", "focus_window_by_name", "close_window_by_name",
                   "maximize_window_by_name", "minimize_window_by_name", "restore_window_by_name",
                   "screenshot_window_by_name", "screenshot_area", "move_resize_window_by_name"]
