@@ -30,6 +30,7 @@ import collections
 import numpy as np
 import torch
 from queue import Queue
+from sentence_transformers import SentenceTransformer
 
 from faster_whisper import WhisperModel
 from piper.voice import PiperVoice
@@ -1397,8 +1398,129 @@ direct_mcp_tools = [
     "cleanup_screenshots", # Clean up temp screenshot files - maintenance
 ]
 
-# Tool schema
-tool_schema = [
+# ----------------------------------------
+# Namespace Organization + Semantic Retrieval
+# ----------------------------------------
+
+# Define tool namespaces with semantic descriptions
+# Each namespace groups related tools with a description used for retrieval
+namespaces = {
+    "app": {
+        "description": "Launching applications, managing installed apps, application control",
+        "tools": ["launch_application", "list_installed_applications"]
+    },
+    "file": {
+        "description": "Opening files, searching for files, opening URLs and web pages, browsing internet",
+        "tools": ["open_file", "open_url", "search_files"]
+    },
+    "window": {
+        "description": "Window management - maximize, minimize, close, focus, move, resize, restore, list windows, take screenshots of windows",
+        "tools": ["list_open_windows", "focus_window_by_name", "close_window_by_name",
+                  "maximize_window_by_name", "minimize_window_by_name", "restore_window_by_name",
+                  "screenshot_window_by_name", "screenshot_area", "move_resize_window_by_name"]
+    },
+    "workspace": {
+        "description": "Virtual desktops, workspace switching, multi-desktop management",
+        "tools": ["list_workspaces", "activate_workspace"]
+    },
+    "input": {
+        "description": "Keyboard input, typing text, pressing keys, key combinations, shortcuts, mouse clicks, dragging, scrolling",
+        "tools": ["type_text_in_window", "press_key_combo", "key_press", "mouse_click",
+                  "mouse_double_click", "drag_item", "scroll_page"]
+    },
+    "volume": {
+        "description": "Sound volume control, mute, unmute, audio levels, speaker settings",
+        "tools": ["set_volume", "mute_volume", "unmute_volume"]
+    },
+    "media": {
+        "description": "Media playback control - play, pause, stop, next track, previous track, music control, audio player control",
+        "tools": ["media_play", "media_pause", "media_play_pause", "media_next", "media_previous", "media_stop"]
+    },
+    "settings": {
+        "description": "System settings - dark mode, light mode, night light, notifications, do not disturb, WiFi, Bluetooth, quick settings toggles",
+        "tools": ["toggle_dark_mode", "toggle_night_light", "toggle_do_not_disturb",
+                  "toggle_wifi", "toggle_bluetooth"]
+    },
+    "vision": {
+        "description": "Visual analysis, screenshot analysis, seeing what's on screen, describing desktop, color picking, monitor information",
+        "tools": ["describe_desktop", "pick_color", "get_monitors"]
+    },
+    "system": {
+        "description": "System automation control, notifications, reminders, timers, cleanup, maintenance",
+        "tools": ["set_enabled", "send_notification", "cleanup_screenshots"]
+    }
+}
+
+# Load embedding model for semantic retrieval
+print("[SYSTEM] Loading embedding model for tool retrieval...")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Pre-compute namespace embeddings
+namespace_names = list(namespaces.keys())
+namespace_descriptions = [namespaces[ns]["description"] for ns in namespace_names]
+namespace_embeddings = embedding_model.encode(namespace_descriptions, convert_to_tensor=True)
+print(f"[SYSTEM] ✓ Loaded embeddings for {len(namespace_names)} namespaces")
+
+def retrieve_relevant_namespaces(user_input: str, top_k: int = 3) -> list:
+    """
+    Retrieve most relevant namespaces for a user input using semantic similarity.
+
+    Args:
+        user_input: The user's command/query
+        top_k: Number of top namespaces to retrieve (default 3)
+
+    Returns:
+        List of namespace names sorted by relevance
+    """
+    # Encode user input
+    from sentence_transformers.util import cos_sim
+    query_embedding = embedding_model.encode(user_input, convert_to_tensor=True)
+
+    # Compute cosine similarity
+    similarities = cos_sim(query_embedding, namespace_embeddings)[0]
+
+    # Get top-k indices
+    top_indices = similarities.argsort(descending=True)[:top_k]
+
+    # Return namespace names
+    relevant_namespaces = [namespace_names[i] for i in top_indices]
+
+    # Debug logging
+    print(f"[RETRIEVAL] Query: '{user_input}'")
+    for i, ns in enumerate(relevant_namespaces):
+        score = similarities[namespace_names.index(ns)].item()
+        print(f"  {i+1}. {ns} (score: {score:.3f}) - {len(namespaces[ns]['tools'])} tools")
+
+    return relevant_namespaces
+
+def build_filtered_tool_schema(relevant_namespaces: list) -> list:
+    """
+    Build a filtered tool schema containing only tools from relevant namespaces.
+
+    Args:
+        relevant_namespaces: List of namespace names to include
+
+    Returns:
+        Filtered tool_schema list with only relevant tools
+    """
+    # Collect all tool names from relevant namespaces
+    relevant_tool_names = set()
+    for ns in relevant_namespaces:
+        relevant_tool_names.update(namespaces[ns]["tools"])
+
+    # Filter tool_schema (will be defined below)
+    # We'll use a mapping from tool name to tool definition
+    filtered_schema = [tool for tool in tool_schema_full
+                      if tool["function"]["name"] in relevant_tool_names]
+
+    print(f"[FILTER] Showing {len(filtered_schema)} tools from {len(relevant_namespaces)} namespaces")
+    print(f"  Tools: {[t['function']['name'] for t in filtered_schema]}")
+
+    return filtered_schema
+
+# Full tool schema (all 43 tools)
+# This will be filtered dynamically based on user input
+tool_schema_full = [
 {"type": "function", "function": {"name": "launch_application", "description": "Launches a graphical application on the Linux desktop.", "parameters": {"type": "object", "properties": {"app_name": {"type": "string", "description": "The command name of the app"}}, "required": ["app_name"]}}},
 {"type": "function", "function": {"name": "describe_desktop", "description": "Captures a screenshot of the desktop and describes what is visible using AI vision.", "parameters": {"type": "object", "properties": {}}}},
 {"type": "function", "function": {"name": "list_installed_applications", "description": "Lists all installed GUI applications available on the Linux system.", "parameters": {"type": "object", "properties": {}}}},
@@ -1443,6 +1565,9 @@ tool_schema = [
 {"type": "function", "function": {"name": "send_notification", "description": "Send a desktop notification immediately or after a delay. Use for reminders, timers, alerts. Examples: 'remind me in 5 minutes about the meeting', 'notify me in 1 hour to check logs', 'alert me in 30 seconds', 'send notification build complete' (immediate).", "parameters": {"type": "object", "properties": {"summary": {"type": "string", "description": "Notification title/headline (required)"}, "body": {"type": "string", "description": "Notification message body (optional)", "default": ""}, "delay": {"type": "string", "description": "Time delay before sending (optional). Examples: '5 minutes', '1 hour', '30 seconds', '2 hours 30 minutes'. If empty, sends immediately.", "default": ""}}, "required": ["summary"]}}},
 {"type": "function", "function": {"name": "cleanup_screenshots", "description": "Remove all temporary screenshot files from /tmp/gnome-mcp to free up disk space. Use for 'clean up screenshots', 'delete temp screenshots', 'free up screenshot space'.", "parameters": {"type": "object", "properties": {}, "required": []}}}
 ]
+
+# Initially, use all tools (will be filtered dynamically during execution)
+tool_schema = tool_schema_full
 
 # ----------------------------------------
 # Voice Setup
@@ -1911,10 +2036,17 @@ def run_agent():
 
                 command_messages.append({"role": "user", "content": user_input})
 
+                # Hybrid namespace + retrieval approach
+                # Retrieve top 3 most relevant namespaces for this query
+                relevant_namespaces = retrieve_relevant_namespaces(user_input, top_k=3)
+
+                # Build filtered tool schema with only relevant tools
+                filtered_tools = build_filtered_tool_schema(relevant_namespaces)
+
                 response = ollama.chat(
                     model='gemma4:e4b',
                     messages=command_messages,
-                    tools=tool_schema,
+                    tools=filtered_tools,  # Use filtered tools instead of all 43
                     keep_alive=-1,
                     options={
                         'temperature': 0.0,
