@@ -1410,11 +1410,11 @@ namespaces = {
         "tools": ["launch_application", "list_installed_applications"]
     },
     "file": {
-        "description": "Opening files, searching for files, opening URLs and web pages, browsing internet",
+        "description": "Opening existing files by filename or path - PDFs, images, pictures, screenshots, documents, downloads. Searching for files in folders like Pictures, Documents, Downloads. Opening web URLs and websites.",
         "tools": ["open_file", "open_url", "search_files"]
     },
     "window": {
-        "description": "Window management - maximize, minimize, close, focus, move, resize, restore, list windows, take screenshots of windows",
+        "description": "Window management - maximize, minimize, close, focus, move, resize, restore windows. List currently open windows.",
         "tools": ["list_open_windows", "focus_window_by_name", "close_window_by_name",
                   "maximize_window_by_name", "minimize_window_by_name", "restore_window_by_name",
                   "screenshot_window_by_name", "screenshot_area", "move_resize_window_by_name"]
@@ -1442,7 +1442,7 @@ namespaces = {
                   "toggle_wifi", "toggle_bluetooth"]
     },
     "vision": {
-        "description": "Visual analysis, screenshot analysis, seeing what's on screen, describing desktop, color picking, monitor information",
+        "description": "Analyzing current screen content, describing what's visible on desktop right now, color picking from display, monitor configuration. Not for opening files.",
         "tools": ["describe_desktop", "pick_color", "get_monitors"]
     },
     "system": {
