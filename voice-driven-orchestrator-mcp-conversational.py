@@ -1399,6 +1399,7 @@ def drag_item(from_position: str = "center", to_position: str = "center",
 # Available tools (custom wrappers)
 available_tools = {
     "describe_desktop": describe_desktop,
+    "list_installed_applications": list_installed_applications,
     "list_open_windows": list_open_windows,
     "focus_window_by_name": focus_window_by_name,
     "close_window_by_name": close_window_by_name,
@@ -1567,6 +1568,7 @@ def build_filtered_tool_schema(relevant_namespaces: list) -> list:
 tool_schema_full = [
 {"type": "function", "function": {"name": "gnome_search", "description": "Use GNOME search to find and open apps, files, or settings. Opens Activities search, types the query, and presses Enter. GNOME finds and opens the best match automatically. Extract just the app name, file name, or domain from user input.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Just the app name, file name, or domain. Examples: 'firefox', 'text editor', 'screenshot.png', 'amazon.com', 'wifi'"}}, "required": ["query"]}}},
 {"type": "function", "function": {"name": "describe_desktop", "description": "Captures a screenshot of the desktop and describes what is visible using AI vision.", "parameters": {"type": "object", "properties": {}}}},
+{"type": "function", "function": {"name": "list_installed_applications", "description": "Lists all installed GUI applications available on the Linux system. Use for 'what apps are installed', 'list all applications', 'show me installed programs'.", "parameters": {"type": "object", "properties": {}}}},
 {"type": "function", "function": {"name": "list_open_windows", "description": "Lists all currently open windows on the desktop.", "parameters": {"type": "object", "properties": {}}}},
 {"type": "function", "function": {"name": "focus_window_by_name", "description": "Focus and bring to front a window. Can match by application name (e.g. 'text editor', 'firefox'). If window_name is empty, focuses the current window.", "parameters": {"type": "object", "properties": {"window_name": {"type": "string", "description": "Application name or part of window title (e.g., 'text editor', 'firefox'). Leave empty to use current window.", "default": ""}}, "required": []}}},
 {"type": "function", "function": {"name": "close_window_by_name", "description": "Safely close a window. Matches by application name (e.g., 'text editor'). If window_name is empty, closes the current window. If unsaved changes exist, asks user via voice what to do (Save, Discard, Cancel).", "parameters": {"type": "object", "properties": {"window_name": {"type": "string", "description": "Application name or part of window title (e.g., 'text editor', 'firefox'). Leave empty to use current window.", "default": ""}}, "required": []}}},
