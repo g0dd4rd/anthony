@@ -628,14 +628,23 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
 
         # MOVE_RESIZE
         elif action == "move_resize":
+            # Validate that dimensions are integers (gemma4 sometimes passes strings like "50%")
+            try:
+                x_int = int(x) if isinstance(x, (int, str)) else x
+                y_int = int(y) if isinstance(y, (int, str)) else y
+                width_int = int(width) if isinstance(width, (int, str)) else width
+                height_int = int(height) if isinstance(height, (int, str)) else height
+            except (ValueError, TypeError):
+                return f"Error: move_resize requires integer dimensions, got x={x}, y={y}, width={width}, height={height}"
+
             mcp_client.call_tool("move_resize_window", {
                 "window_id": window_id,
-                "x": x,
-                "y": y,
-                "width": width,
-                "height": height
+                "x": x_int,
+                "y": y_int,
+                "width": width_int,
+                "height": height_int
             })
-            return f"Moved {friendly_name} to ({x}, {y}) with size {width}x{height}"
+            return f"Moved {friendly_name} to ({x_int}, {y_int}) with size {width_int}x{height_int}"
 
         else:
             return f"Unknown window action: {action}"
@@ -1057,7 +1066,7 @@ namespaces = {
         "tools": ["gnome_search"]
     },
     "window": {
-        "description": "Managing already running windows - maximize, minimize, close, focus, move, resize, restore existing application windows. List what windows are currently running. Take window screenshots or area screenshots. NOT for launching new applications.",
+        "description": "Managing already running application windows - close windows (close firefox, close nautilus, close text editor, quit application), maximize, minimize, focus, move, resize, restore existing windows. List what windows are currently running. Take window screenshots or area screenshots. NOT for launching new applications.",
         "tools": ["window_control"]
     },
     "input": {
@@ -1073,15 +1082,15 @@ namespaces = {
         "tools": ["system_settings"]
     },
     "vision": {
-        "description": "Analyzing current screen content, describing what's visible on desktop right now, color picking from display, monitor configuration. Not for opening files.",
+        "description": "Analyzing current screen content, describing what's visible on desktop right now, color picking from display, monitor configuration. Not for opening files or managing screenshots.",
         "tools": ["vision_control"]
     },
     "workspace": {
-        "description": "Virtual desktops, workspace switching, multi-desktop management, listing workspaces",
+        "description": "Virtual desktops, workspace switching (switch to workspace 1, go to workspace 2, activate workspace), multi-desktop management, listing workspaces",
         "tools": ["workspace_control"]
     },
     "system": {
-        "description": "System automation control, notifications, reminders, cleanup, maintenance, listing installed applications",
+        "description": "System tasks: list installed applications (show apps, what apps are installed), send desktop notifications (notify me, remind me, alert me in X minutes), clean up screenshots (delete screenshots, remove screenshots, cleanup temp files), enable or disable automation",
         "tools": ["list_installed_applications", "send_notification", "cleanup_screenshots", "set_enabled"]
     }
 }
@@ -1134,7 +1143,7 @@ tool_schema_full = [
     {"type": "function", "function": {"name": "gnome_search", "description": "Use GNOME search to find and open apps, files, or settings. Opens Activities search, types the query, and presses Enter. GNOME finds and opens the best match automatically.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Just the app name, file name, or domain. Examples: 'firefox', 'text editor', 'screenshot.png', 'amazon.com', 'wifi'"}}, "required": ["query"]}}},
 
     # 2. WINDOW_CONTROL (facade)
-    {"type": "function", "function": {"name": "window_control", "description": "Unified window management: list windows, focus/close/minimize/maximize/restore windows, take window screenshots or area screenshots, move and resize windows. Matches windows by application name (e.g., 'text editor', 'firefox'). Empty window_name = current window.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action to perform: list | focus | close | minimize | maximize | restore | screenshot | screenshot_area | move_resize"}, "window_name": {"type": "string", "description": "Application name (e.g., 'text editor'). Leave empty for current window.", "default": ""}, "x": {"type": "integer", "description": "X position for move_resize or screenshot_area", "default": 0}, "y": {"type": "integer", "description": "Y position for move_resize or screenshot_area", "default": 0}, "width": {"type": "integer", "description": "Width for move_resize or screenshot_area", "default": 800}, "height": {"type": "integer", "description": "Height for move_resize or screenshot_area", "default": 600}, "include_frame": {"type": "boolean", "description": "Include window borders in screenshot", "default": True}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "window_control", "description": "Unified window management: list windows, focus/close/minimize/maximize/restore windows, take window screenshots or area screenshots, move and resize windows. Matches windows by application name (e.g., 'text editor', 'firefox', 'nautilus'). Empty window_name = current window. For move_resize: left half of 1920x1080 screen = x:0, y:0, width:960, height:1080. Right half = x:960, y:0, width:960, height:1080.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action to perform: list | focus | close | minimize | maximize | restore | screenshot | screenshot_area | move_resize"}, "window_name": {"type": "string", "description": "Application name (e.g., 'text editor'). Leave empty for current window.", "default": ""}, "x": {"type": "integer", "description": "X position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "y": {"type": "integer", "description": "Y position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "width": {"type": "integer", "description": "Width in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For left/right half: use 960 pixels on 1920 wide screen.", "default": 800}, "height": {"type": "integer", "description": "Height in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For full height: use 1080 pixels on 1080 tall screen.", "default": 600}, "include_frame": {"type": "boolean", "description": "Include window borders in screenshot", "default": True}}, "required": ["action"]}}},
 
     # 3. INPUT_CONTROL (facade)
     {"type": "function", "function": {"name": "input_control", "description": "Unified input control: type text, press key combos (Ctrl+C, Alt+Tab), press single keys, mouse click/double-click, drag and drop (supports both natural positions like 'left', 'right' and exact coordinates), scroll pages up/down. Handles all keyboard and mouse operations.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: type | key_combo | key_press | click | double_click | drag | scroll"}, "text": {"type": "string", "description": "Text to type (for 'type' action)", "default": ""}, "keys": {"type": "string", "description": "Key combo like 'Ctrl+c' or single key like 'Enter'", "default": ""}, "x": {"type": "integer", "description": "X coordinate for click or drag start", "default": 0}, "y": {"type": "integer", "description": "Y coordinate for click or drag start", "default": 0}, "to_x": {"type": "integer", "description": "Drag end X coordinate", "default": 0}, "to_y": {"type": "integer", "description": "Drag end Y coordinate", "default": 0}, "from_position": {"type": "string", "description": "Natural language start position for drag: 'left', 'right', 'center', 'top left', etc.", "default": "center"}, "to_position": {"type": "string", "description": "Natural language end position for drag: 'left', 'right', 'center', 'bottom right', etc.", "default": "center"}, "direction": {"type": "string", "description": "Scroll direction: 'up' or 'down'", "default": "down"}, "amount": {"type": "integer", "description": "Scroll amount (number of times)", "default": 1}, "button": {"type": "integer", "description": "Mouse button: 1=left, 2=middle, 3=right", "default": 1}}, "required": ["action"]}}},
@@ -1149,7 +1158,7 @@ tool_schema_full = [
     {"type": "function", "function": {"name": "vision_control", "description": "Unified vision operations: describe what's on screen using AI vision, pick RGB color at screen coordinates, get monitor information (position, resolution, scaling). Handles all screen analysis and display queries.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: describe | pick_color | get_monitors"}, "x": {"type": "integer", "description": "X coordinate for pick_color", "default": 0}, "y": {"type": "integer", "description": "Y coordinate for pick_color", "default": 0}}, "required": ["action"]}}},
 
     # 7. WORKSPACE_CONTROL (facade)
-    {"type": "function", "function": {"name": "workspace_control", "description": "Unified workspace management: list all virtual desktops, switch to specific workspace by index (0-based). Handles all multi-desktop operations.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: list | activate"}, "index": {"type": "integer", "description": "Workspace index (0-based) for activate action", "default": 0}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "workspace_control", "description": "Unified workspace management: list all virtual desktops, switch to specific workspace by index (0-based). Handles all multi-desktop operations. NOTE: Workspace numbering is 0-based: 'workspace 1' = index 0, 'workspace 2' = index 1, etc. User says 'workspace ONE' or 'workspace 1' means index=1 (second workspace).", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: list | activate"}, "index": {"type": "integer", "description": "Workspace index (0-based integer). User says 'workspace 1' or 'workspace ONE' = use index 1. User says 'workspace 0' or 'first workspace' = use index 0.", "default": 0}}, "required": ["action"]}}},
 
     # 8. LIST_INSTALLED_APPLICATIONS (standalone)
     {"type": "function", "function": {"name": "list_installed_applications", "description": "Lists all installed GUI applications available on the Linux system. Use for 'what apps are installed', 'list all applications', 'show me installed programs'.", "parameters": {"type": "object", "properties": {}}}},
@@ -1482,6 +1491,17 @@ Examples of COMMAND:
 - "find all PDFs"
 - "search for screenshots"
 - "where are my tax documents"
+- "list installed applications"
+- "show installed apps"
+- "what apps are installed"
+- "notify me in 5 minutes"
+- "remind me about meeting"
+- "send notification"
+- "alert me in 1 hour"
+- "cleanup screenshots"
+- "remove screenshots"
+- "list workspaces"
+- "switch to workspace 1"
 
 Examples of CONVERSATION:
 - "what is docker"
