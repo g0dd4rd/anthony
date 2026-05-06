@@ -46,6 +46,7 @@ import time
 import collections
 import numpy as np
 import torch
+import webcolors
 from queue import Queue
 from sentence_transformers import SentenceTransformer
 
@@ -919,7 +920,32 @@ def vision_control(action: str, x: int = 0, y: int = 0) -> str:
             print(f"[DEBUG] vision_control received coordinates: x={x}, y={y}, types: x={type(x)}, y={type(y)}")
             result = mcp_client.call_tool("pick_color", {"x": x, "y": y})
             print(f"[DEBUG] pick_color result: {result}")
-            return result
+
+            # Parse RGB values and convert to color name
+            try:
+                rgb_data = json.loads(result)
+                r, g, b = int(rgb_data['r']), int(rgb_data['g']), int(rgb_data['b'])
+
+                # Try exact match first
+                try:
+                    color_name = webcolors.rgb_to_name((r, g, b), spec='css3')
+                except ValueError:
+                    # Find closest named color
+                    min_distance = float('inf')
+                    closest_name = None
+                    for name in webcolors.names('css3'):
+                        named_rgb = webcolors.name_to_rgb(name)
+                        distance = sum((a - b) ** 2 for a, b in zip((r, g, b), named_rgb)) ** 0.5
+                        if distance < min_distance:
+                            min_distance = distance
+                            closest_name = name
+                    color_name = closest_name
+
+                return f"{color_name} (RGB: {r}, {g}, {b})"
+            except Exception as e:
+                # Fallback to raw result if parsing fails
+                print(f"[DEBUG] Color name conversion failed: {e}")
+                return result
 
         # GET_MONITORS
         elif action == "get_monitors":
