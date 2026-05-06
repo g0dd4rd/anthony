@@ -65,6 +65,7 @@ echo "  - Voice recognition (Whisper)"
 echo "  - Text-to-speech (Piper)"
 echo "  - Desktop automation (MCP)"
 echo "  - Conversational AI (Gemma4)"
+echo "  - Volume & media control (PipeWire/PulseAudio, playerctl)"
 echo ""
 read -p "Continue? (y/n) " -n 1 -r
 echo
@@ -82,6 +83,10 @@ print_step "Checking for required system packages..."
 
 PACKAGES_TO_INSTALL=()
 
+if ! rpm -q git &> /dev/null; then
+    PACKAGES_TO_INSTALL+=("git")
+fi
+
 if ! rpm -q alsa-utils &> /dev/null; then
     PACKAGES_TO_INSTALL+=("alsa-utils")
 fi
@@ -92,6 +97,16 @@ fi
 
 if ! rpm -q python3-devel &> /dev/null; then
     PACKAGES_TO_INSTALL+=("python3-devel")
+fi
+
+# For volume control (PipeWire/PulseAudio)
+if ! rpm -q pipewire-utils &> /dev/null; then
+    PACKAGES_TO_INSTALL+=("pipewire-utils")
+fi
+
+# For media control (play/pause/next/previous)
+if ! rpm -q playerctl &> /dev/null; then
+    PACKAGES_TO_INSTALL+=("playerctl")
 fi
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
@@ -119,6 +134,7 @@ PYTHON_PACKAGES=(
     "mcp"
     "torch"
     "numpy"
+    "sentence-transformers"
     "dogtail"
 )
 
@@ -133,19 +149,29 @@ done
 print_success "All Python packages installed"
 
 # ========================================
-# 3. Node.js & MCP Server
+# 3. GNOME Desktop MCP Server
 # ========================================
 print_header "Step 3: Installing GNOME Desktop MCP"
 
-if ! command -v node &> /dev/null; then
-    print_warning "Node.js is not installed. Installing..."
-    sudo dnf install -y nodejs npm
-fi
-
 if ! command -v gnome-desktop-mcp &> /dev/null; then
     print_step "Installing gnome-desktop-mcp..."
-    npm install -g gnome-desktop-mcp
-    print_success "gnome-desktop-mcp installed"
+
+    # Check if local development version exists
+    if [ -d "$HOME/gnome-desktop-mcp" ]; then
+        print_step "Found local gnome-desktop-mcp, installing from source..."
+        cd "$HOME/gnome-desktop-mcp"
+        ./install.sh
+        print_success "gnome-desktop-mcp installed from local source"
+    else
+        print_step "Cloning gnome-desktop-mcp from GitHub..."
+        cd "$HOME"
+        git clone https://github.com/sbuysse/gnome-mcp.git gnome-desktop-mcp
+        cd gnome-desktop-mcp
+        ./install.sh
+        print_success "gnome-desktop-mcp installed from GitHub"
+    fi
+
+    cd "$HOME/anthony"
 else
     print_success "gnome-desktop-mcp already installed"
 fi
@@ -227,11 +253,12 @@ VERIFICATION_FAILED=0
 print_step "Checking system commands..."
 check_command "python3" || VERIFICATION_FAILED=1
 check_command "pip" || VERIFICATION_FAILED=1
-check_command "node" || VERIFICATION_FAILED=1
-check_command "npm" || VERIFICATION_FAILED=1
+check_command "git" || VERIFICATION_FAILED=1
 check_command "ollama" || VERIFICATION_FAILED=1
 check_command "gnome-desktop-mcp" || VERIFICATION_FAILED=1
 check_command "aplay" || VERIFICATION_FAILED=1
+check_command "pactl" || VERIFICATION_FAILED=1
+check_command "playerctl" || VERIFICATION_FAILED=1
 
 echo ""
 print_step "Checking Python modules..."
@@ -243,6 +270,7 @@ check_python_module "piper" || VERIFICATION_FAILED=1
 check_python_module "mcp" || VERIFICATION_FAILED=1
 check_python_module "torch" || VERIFICATION_FAILED=1
 check_python_module "numpy" || VERIFICATION_FAILED=1
+check_python_module "sentence_transformers" || VERIFICATION_FAILED=1
 check_python_module "dogtail.tree" || VERIFICATION_FAILED=1
 
 echo ""
