@@ -2123,8 +2123,8 @@ def run_agent():
                 command_messages.append({"role": "user", "content": user_input})
 
                 # Hybrid namespace + retrieval approach
-                # Retrieve top 3 most relevant namespaces for this query
-                relevant_namespaces = retrieve_relevant_namespaces(user_input, top_k=3)
+                # Retrieve top 2 most relevant namespaces for this query (faster inference)
+                relevant_namespaces = retrieve_relevant_namespaces(user_input, top_k=2)
 
                 # Build filtered tool schema with only relevant tools
                 filtered_tools = build_filtered_tool_schema(relevant_namespaces)
