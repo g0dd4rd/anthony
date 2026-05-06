@@ -916,7 +916,9 @@ def vision_control(action: str, x: int = 0, y: int = 0) -> str:
 
         # PICK_COLOR
         elif action == "pick_color":
+            print(f"[DEBUG] vision_control received coordinates: x={x}, y={y}, types: x={type(x)}, y={type(y)}")
             result = mcp_client.call_tool("pick_color", {"x": x, "y": y})
+            print(f"[DEBUG] pick_color result: {result}")
             return result
 
         # GET_MONITORS
