@@ -482,60 +482,79 @@ def run_agent():
         }
     ]
 
-    while True:
-        user_input = listen_and_transcribe()
-        if not user_input:
-            continue
+    try:
+        while True:
+            user_input = listen_and_transcribe()
+            if not user_input:
+                continue
 
-        # Start timing from when user input is captured
-        response_start_time = time.time()
+            # Start timing from when user input is captured
+            response_start_time = time.time()
 
-        messages.append({"role": "user", "content": user_input})
+            messages.append({"role": "user", "content": user_input})
 
-        print(f"[TIMING] ⏱️  Calling gemma4:e4b with {len(tool_schema)} tools...")
-        llm_start_time = time.time()
+            print(f"[TIMING] ⏱️  Calling gemma4:e4b with {len(tool_schema)} tools...")
+            llm_start_time = time.time()
 
-        response = ollama.chat(
-            model='gemma4:e4b',
-            messages=messages,
-            tools=tool_schema,
-            keep_alive=-1,
-            options={
-                'temperature': 0.0,
-                'top_p': 0.1
-            }
-        )
+            response = ollama.chat(
+                model='gemma4:e4b',
+                messages=messages,
+                tools=tool_schema,
+                keep_alive=-1,
+                options={
+                    'temperature': 0.0,
+                    'top_p': 0.1
+                }
+            )
 
-        llm_elapsed = time.time() - llm_start_time
-        print(f"[TIMING] ⏱️  LLM inference took: {llm_elapsed:.2f}s")
+            llm_elapsed = time.time() - llm_start_time
+            print(f"[TIMING] ⏱️  LLM inference took: {llm_elapsed:.2f}s")
 
-        message = response['message']
-        messages.append(message)
+            message = response['message']
+            messages.append(message)
 
-        if message.get('tool_calls'):
-            for tool_call in message['tool_calls']:
-                tool_name = tool_call['function']['name']
-                arguments = tool_call['function']['arguments']
+            if message.get('tool_calls'):
+                for tool_call in message['tool_calls']:
+                    tool_name = tool_call['function']['name']
+                    arguments = tool_call['function']['arguments']
 
-                if tool_name in available_tools:
-                    function_to_call = available_tools[tool_name]
-                    result = function_to_call(**arguments)
+                    if tool_name in available_tools:
+                        function_to_call = available_tools[tool_name]
+                        result = function_to_call(**arguments)
 
-                    print(f"\n[OS Feedback]: {result}")
-                    speak(result)
+                        print(f"\n[OS Feedback]: {result}")
+                        speak(result)
 
-                    messages = [messages[0]]  # Reset to system prompt only
+                        messages = [messages[0]]  # Reset to system prompt only
 
-            # Print total response time
-            response_time = time.time() - response_start_time
-            print(f"[TIMING] ⏱️  Total response time: {response_time:.2f}s")
-        else:
-            # No tool called - just timing info
-            response_time = time.time() - response_start_time
-            print(f"[TIMING] ⏱️  Total response time: {response_time:.2f}s (no tool called)")
+                # Print total response time
+                response_time = time.time() - response_start_time
+                print(f"[TIMING] ⏱️  Total response time: {response_time:.2f}s")
+            else:
+                # No tool called - just timing info
+                response_time = time.time() - response_start_time
+                print(f"[TIMING] ⏱️  Total response time: {response_time:.2f}s (no tool called)")
+
+    except KeyboardInterrupt:
+        print("\n[SYSTEM] 🛑 Ctrl+C received, shutting down gracefully...")
+        # Unload models from memory
+        print("[SYSTEM] Unloading AI models...")
+        try:
+            ollama.chat(model='gemma4:e4b', messages=[], keep_alive=0)
+        except:
+            pass  # Ignore errors if model wasn't loaded
+        print("[SYSTEM] ✓ Models unloaded")
+        return
 
 if __name__ == "__main__":
     try:
         run_agent()
     except KeyboardInterrupt:
         print("\n\n[SYSTEM] Shutting down Agentic OS...")
+        # Unload models from memory
+        print("[SYSTEM] Unloading AI models...")
+        try:
+            ollama.chat(model='gemma4:e4b', messages=[], keep_alive=0)
+        except:
+            pass  # Ignore errors if model wasn't loaded
+        print("[SYSTEM] ✓ Models unloaded")
