@@ -1811,6 +1811,10 @@ def run_agent():
                         tool_name = tool_call['function']['name']
                         arguments = tool_call['function']['arguments']
 
+                        # Parse JSON string to dict if needed (llama-server returns string, Ollama returns dict)
+                        if isinstance(arguments, str):
+                            arguments = json.loads(arguments)
+
                         # Check if it's a direct MCP tool (no wrapper needed)
                         if tool_name in direct_mcp_tools:
                             print(f"\n[SYSTEM] Calling MCP tool directly: {tool_name}")
