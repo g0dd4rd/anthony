@@ -1413,8 +1413,9 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> list:
     forced_namespaces = []
 
     # Window management verbs → force window namespace
+    # Note: Removed 'screenshot' - it's ambiguous (could be window screenshot, desktop screenshot, or filename)
     window_verbs = ['close', 'quit', 'exit', 'kill', 'minimize', 'maximize', 'restore',
-                    'focus', 'switch to', 'move', 'resize', 'screenshot']
+                    'focus', 'switch to', 'move', 'resize']
     if any(verb in user_input_lower for verb in window_verbs):
         if 'window' not in forced_namespaces:
             forced_namespaces.append('window')
