@@ -1347,17 +1347,46 @@ if not ensure_server_running(force_restart=RESTART_SERVER):
     sys.exit(1)
 
 def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> list:
-    """Retrieve most relevant namespaces using semantic similarity."""
+    """Retrieve most relevant namespaces using semantic similarity + verb routing."""
     from sentence_transformers.util import cos_sim
+
+    user_input_lower = user_input.lower()
+
+    # Verb-based routing: force include specific namespaces for certain verbs
+    forced_namespaces = []
+
+    # Window management verbs → force window namespace
+    window_verbs = ['close', 'quit', 'exit', 'kill', 'minimize', 'maximize', 'restore',
+                    'focus', 'switch to', 'move', 'resize', 'screenshot']
+    if any(verb in user_input_lower for verb in window_verbs):
+        if 'window' not in forced_namespaces:
+            forced_namespaces.append('window')
+
+    # If we forced namespaces, reduce top_k to make room
+    adjusted_top_k = max(1, top_k - len(forced_namespaces))
+
+    # Get semantic matches
     query_embedding = embedding_model.encode(user_input, convert_to_tensor=True)
     similarities = cos_sim(query_embedding, namespace_embeddings)[0]
-    top_indices = similarities.argsort(descending=True)[:top_k]
-    relevant_namespaces = [namespace_names[i] for i in top_indices]
+    top_indices = similarities.argsort(descending=True)[:adjusted_top_k]
+    semantic_namespaces = [namespace_names[i] for i in top_indices]
+
+    # Combine forced + semantic (remove duplicates, preserve order)
+    relevant_namespaces = forced_namespaces.copy()
+    for ns in semantic_namespaces:
+        if ns not in relevant_namespaces:
+            relevant_namespaces.append(ns)
+
+    # Ensure we return exactly top_k namespaces
+    relevant_namespaces = relevant_namespaces[:top_k]
 
     print(f"[RETRIEVAL] Query: '{user_input}'")
+    if forced_namespaces:
+        print(f"[ROUTING] Forced namespaces: {forced_namespaces}")
     for i, ns in enumerate(relevant_namespaces):
         score = similarities[namespace_names.index(ns)].item()
-        print(f"  {i+1}. {ns} (score: {score:.3f}) - {len(namespaces[ns]['tools'])} tools")
+        forced_marker = " [FORCED]" if ns in forced_namespaces else ""
+        print(f"  {i+1}. {ns} (score: {score:.3f}) - {len(namespaces[ns]['tools'])} tools{forced_marker}")
 
     return relevant_namespaces
 
