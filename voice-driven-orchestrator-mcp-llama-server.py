@@ -1700,6 +1700,8 @@ def listen_and_transcribe():
                                 wf.writeframes(b''.join(frames))
                             p_temp.terminate()
 
+                            # Time Whisper transcription
+                            whisper_start = time.time()
                             segments, info = whisper_model.transcribe(
                                 temp_path,
                                 beam_size=5,
@@ -1709,8 +1711,10 @@ def listen_and_transcribe():
                                 vad_parameters=dict(min_silence_duration_ms=500),
                                 initial_prompt="Commands for opening files, applications, and websites. Files may have spaces in names like 'bugs and ideas.txt' or 'practical presentation advice.txt'."
                             )
+                            whisper_elapsed = time.time() - whisper_start
 
                             text = "".join([segment.text for segment in segments]).strip()
+                            print(f'⏱️  Whisper transcription: {whisper_elapsed:.2f}s')
                             print(f'✅ You said: "{text}"\n')
                             return text
                         else:
