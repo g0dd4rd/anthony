@@ -1792,7 +1792,7 @@ def run_agent():
                     messages=command_messages,
                     tools=filtered_tools,
                     temperature=0.0,
-                    max_tokens=200  # Limit tokens - function calls are short (<100 tokens)
+                    max_tokens=300  # Increased for complex reasoning (was 200)
                 )
                 llm_elapsed = time.time() - llm_start_time
                 print(f"[TIMING] ⏱️  LLM inference took: {llm_elapsed:.2f}s")
