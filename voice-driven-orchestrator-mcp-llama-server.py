@@ -584,6 +584,15 @@ def smart_match_window(window_name: str, windows: list) -> dict:
 
     window_name_lower = window_name.lower()
 
+    # Try resolving via app_name_map (e.g., "settings" → "gnome-control-center")
+    resolved_exec = app_name_map.get(window_name_lower)
+    if resolved_exec:
+        # Try matching resolved exec name first
+        for w in windows:
+            wm_class = w.get('wmClass', '').lower()
+            if resolved_exec.lower() in wm_class or wm_class in resolved_exec.lower():
+                return w
+
     # Try app name matching first
     for w in windows:
         wm_class = w.get('wmClass', '')
