@@ -863,6 +863,16 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
             except (ValueError, TypeError):
                 return f"Error: move_resize requires integer dimensions, got x={x}, y={y}, width={width}, height={height}"
 
+            # Get current window info to compare if size changed
+            window_info = mcp_client.call_tool("list_windows", {})
+            windows = json.loads(window_info)
+            current_window = next((w for w in windows if w['id'] == window_id), None)
+
+            old_width = current_window.get('width', 0) if current_window else 0
+            old_height = current_window.get('height', 0) if current_window else 0
+            old_x = current_window.get('x', 0) if current_window else 0
+            old_y = current_window.get('y', 0) if current_window else 0
+
             mcp_client.call_tool("move_resize_window", {
                 "window_id": window_id,
                 "x": x_int,
@@ -871,11 +881,43 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 "height": height_int
             })
 
-            # Smart feedback: if using default position (0, 0), assume user only wanted to resize
-            if x_int == 0 and y_int == 0:
+            # Smart feedback: infer user intent from what changed
+            size_changed = abs(width_int - old_width) > 50 or abs(height_int - old_height) > 50
+            position_changed = abs(x_int - old_x) > 50 or abs(y_int - old_y) > 50
+
+            # Infer screen layout (common GNOME tiling positions)
+            # Assuming 1920x1080 screen (adapt from actual values)
+            position_description = None
+            if x_int == 0 and width_int < 1000:  # Left half/side
+                position_description = "left side"
+            elif x_int > 900 and x_int < 1000 and width_int < 1000:  # Right half/side
+                position_description = "right side"
+            elif y_int == 0 and height_int < 600:  # Top
+                position_description = "top"
+            elif y_int > 400 and height_int < 700:  # Bottom
+                position_description = "bottom"
+            elif x_int == 0 and y_int == 0:  # Top-left corner
+                position_description = "top-left corner"
+            elif x_int > 900 and y_int == 0:  # Top-right corner
+                position_description = "top-right corner"
+
+            # Generate natural feedback
+            # Priority: If we have a named position (left/right/top/bottom), just say that
+            # The automatic resize from tiling is an implementation detail users don't care about
+            if position_description and position_changed:
+                return f"Moved {friendly_name} to the {position_description}"
+            elif size_changed and not position_changed:
+                # Only resize, no move
                 return f"Resized {friendly_name} to {width_int}x{height_int}"
+            elif position_changed and not size_changed:
+                # Moved but no named position
+                return f"Moved {friendly_name}"
+            elif position_changed and size_changed:
+                # Both changed, but no named position (custom move+resize)
+                return f"Moved and resized {friendly_name} to {width_int}x{height_int}"
             else:
-                return f"Moved {friendly_name} to ({x_int}, {y_int}) and resized to {width_int}x{height_int}"
+                # Nothing really changed?
+                return f"Window {friendly_name} is already at the requested position and size"
 
         else:
             return f"Unknown window action: {action}"
