@@ -1262,7 +1262,27 @@ def vision_control(action: str, x: int = 0, y: int = 0) -> str:
         # GET_MONITORS
         elif action == "get_monitors":
             result = mcp_client.call_tool("get_monitors", {})
-            return result
+
+            # Format friendly output for users
+            try:
+                monitors = json.loads(result)
+                if len(monitors) == 0:
+                    return "No monitors detected"
+                elif len(monitors) == 1:
+                    m = monitors[0]
+                    primary_tag = " (primary)" if m.get('primary') else ""
+                    return f"1 {primary_tag} monitor, resolution {m['width']}x{m['height']} at scale {m.get('scale', 1)}"
+                else:
+                    # Multiple monitors
+                    lines = [f"{len(monitors)} monitors connected:"]
+                    for i, m in enumerate(monitors):
+                        primary_tag = " (primary)" if m.get('primary') else ""
+                        lines.append(f"Monitor {i+1}{primary_tag}, resolution {m['width']}x{m['height']} at position ({m['x']}, {m['y']})")
+                    return " ".join(lines)
+            except Exception as e:
+                # Fallback to raw JSON if parsing fails
+                print(f"[DEBUG] Monitor formatting failed: {e}")
+                return result
 
         else:
             return f"Unknown vision action: {action}"
