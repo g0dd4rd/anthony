@@ -1166,15 +1166,16 @@ def system_settings(action: str, state: str = "toggle", path: str = "") -> str:
         return f"Error in system_settings: {str(e)}"
 
 
-def vision_control(action: str, x: int = 0, y: int = 0) -> str:
+def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
     """
     **FACADE TOOL**: Unified vision operations.
 
-    Handles screen analysis and display info: screenshot, describe, pick_color, get_monitors.
+    Handles screen analysis and display info: screenshot, describe, describe_file, pick_color, get_monitors.
 
     Args:
-        action: screenshot | describe | pick_color | get_monitors
+        action: screenshot | describe | describe_file | pick_color | get_monitors
         x, y: Coordinates for pick_color
+        path: File path for describe_file
     """
     print(f"\n[VISION_CONTROL] Action: {action}")
 
@@ -1228,6 +1229,51 @@ def vision_control(action: str, x: int = 0, y: int = 0) -> str:
             except:
                 pass
 
+            return description
+
+        # DESCRIBE_FILE
+        elif action == "describe_file":
+            file_path = os.path.expanduser(path)
+            if not os.path.isfile(file_path):
+                print(f"[VISION_CONTROL] Exact path not found, searching via localsearch...")
+                try:
+                    search_result = mcp_client.call_tool("search_files", {"query": os.path.basename(path), "file_type": "files", "limit": 5})
+                    results = json.loads(search_result)
+                    if results.get("count", 0) > 0:
+                        file_path = results["results"][0]
+                        print(f"[VISION_CONTROL] Resolved to: {file_path}")
+                    else:
+                        return f"File not found: {path}"
+                except Exception:
+                    return f"File not found: {path}"
+
+            with open(file_path, 'rb') as img_file:
+                import base64
+                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+
+            response = ollama.chat(
+                model=OLLAMA_VISION_MODEL,
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': 'Describe the image in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.'
+                    },
+                    {
+                        'role': 'user',
+                        'content': f'Describe this image: {os.path.basename(file_path)}',
+                        'images': [img_data]
+                    }
+                ],
+                options={
+                    'num_ctx': 2048,
+                    'num_predict': 800,
+                    'temperature': 0.7,
+                    'num_gpu': 99,
+                }
+            )
+
+            message = response.message if hasattr(response, 'message') else response['message']
+            description = message.content if hasattr(message, 'content') else message.get('content', '')
             return description
 
         # PICK_COLOR
@@ -1427,6 +1473,7 @@ available_tools = {
 # Direct MCP tools (forwarded without wrappers)
 direct_mcp_tools = [
     "gnome_search",      # GNOME search overlay
+    "search_files",      # File search via localsearch (returns paths)
     "ping",              # Health check
     "get_enabled",       # Check automation status
     "set_enabled",       # Enable/disable automation
@@ -1458,8 +1505,8 @@ namespaces = {
         "tools": ["system_settings"]
     },
     "vision": {
-        "description": "Screen analysis and display tools: capture full desktop image, describe current screen content with AI, pick pixel colors at coordinates, get monitor information (resolution, scaling, position)",
-        "tools": ["vision_control"]
+        "description": "Screen analysis and display tools: capture full desktop image, describe current screen content with AI, describe or analyze an image file by path (e.g., describe screenshot.png, what's in this picture), pick pixel colors at coordinates, get monitor information (resolution, scaling, position)",
+        "tools": ["vision_control", "search_files"]
     },
     "workspace": {
         "description": "Virtual desktops, workspace switching (switch to workspace 1, go to workspace 2, activate workspace), multi-desktop management, listing workspaces",
@@ -1553,7 +1600,10 @@ tool_schema_full = [
     # 1. SEARCH (direct MCP)
     {"type": "function", "function": {"name": "gnome_search", "description": "Find and open apps, files, settings, or websites. For WEBSITES (domains/URLs): append ' website' to query (e.g., 'amazon.com website', 'github.com website'). For FILES (documents, images, etc.): append ' file' to query (e.g., 'Screenshot-1.png file', 'document.pdf file'). For APPS and SETTINGS: use query as-is (e.g., 'firefox', 'text editor', 'wifi settings'). The markers (' website' or ' file') tell the system how to handle the query.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "App name, file name+' file', setting, or domain+' website'. Examples: 'firefox', 'text editor', 'Screenshot-1.png file', 'document.pdf file', 'amazon.com website', 'github.com website', 'wifi'"}}, "required": ["query"]}}},
 
-    # 2. WINDOW_CONTROL (facade)
+    # 2. SEARCH_FILES (direct MCP)
+    {"type": "function", "function": {"name": "search_files", "description": "Search for files by name using GNOME file indexing. Returns a JSON list of full absolute file paths matching the query. Use this to find a file's exact path before acting on it (e.g., before describing an image). Does NOT open files.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Filename or keywords to search for. Example: 'screenshot.png', 'report'"}}, "required": ["query"]}}},
+
+    # 3. WINDOW_CONTROL (facade)
     {"type": "function", "function": {"name": "window_control", "description": "Unified window management: list windows, focus/close/minimize/maximize/restore windows, take window screenshots or area screenshots, move and resize windows. Matches windows by application name (e.g., 'text editor', 'firefox', 'nautilus'). Empty window_name = current window. For move_resize: left half of 1920x1080 screen = x:0, y:0, width:960, height:1080. Right half = x:960, y:0, width:960, height:1080.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action to perform: list | focus | close | minimize | maximize | restore | screenshot | screenshot_area | move_resize"}, "window_name": {"type": "string", "description": "Application name (e.g., 'text editor'). Leave empty for current window.", "default": ""}, "x": {"type": "integer", "description": "X position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "y": {"type": "integer", "description": "Y position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "width": {"type": "integer", "description": "Width in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For left/right half: use 960 pixels on 1920 wide screen.", "default": 800}, "height": {"type": "integer", "description": "Height in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For full height: use 1080 pixels on 1080 tall screen.", "default": 600}, "include_frame": {"type": "boolean", "description": "Include window borders in screenshot", "default": True}}, "required": ["action"]}}},
 
     # 3. INPUT_CONTROL (facade)
@@ -1566,7 +1616,7 @@ tool_schema_full = [
     {"type": "function", "function": {"name": "system_settings", "description": "Unified system settings: toggle dark mode, night light, do not disturb, WiFi, Bluetooth, set wallpaper. Handles all quick settings and appearance controls. For wallpaper: can use color names (red, blue, green), wallpaper names (fedora, adwaita), or file paths.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Setting: dark_mode | night_light | do_not_disturb | wifi | bluetooth | wallpaper"}, "state": {"type": "string", "description": "For toggles: 'on' or 'off'. For wallpaper: color name (red, blue), wallpaper name (fedora), or path", "default": "toggle"}, "path": {"type": "string", "description": "Image path for wallpaper action (alternative to state parameter)", "default": ""}}, "required": ["action"]}}},
 
     # 6. VISION_CONTROL (facade)
-    {"type": "function", "function": {"name": "vision_control", "description": "Unified vision operations: take full desktop screenshot, describe what's on screen using AI vision, pick RGB color at screen coordinates, get monitor information (position, resolution, scaling). Handles all screen analysis and display queries. For pick_color: user says 'at 100, 100' or 'at 100-100' or 'at coordinates 100 and 100' means x=100, y=100.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: screenshot (full desktop) | describe (AI vision) | pick_color | get_monitors"}, "x": {"type": "integer", "description": "X coordinate in pixels for pick_color action. User says '100, 100' or '100-100' means x=100. Must be positive integer >= 1.", "default": 0}, "y": {"type": "integer", "description": "Y coordinate in pixels for pick_color action. User says '100, 100' or '100-100' or 'at 100 and 100' means y=100. Must be positive integer >= 1.", "default": 0}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "vision_control", "description": "Unified vision operations: take full desktop screenshot, describe what's on screen using AI vision, describe/analyze an image file by path, pick RGB color at screen coordinates, get monitor information (position, resolution, scaling). Handles all screen analysis and display queries. For pick_color: user says 'at 100, 100' or 'at 100-100' or 'at coordinates 100 and 100' means x=100, y=100. For describe_file: use search_files FIRST to get the exact path, then call describe_file with the full path from the search result.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: screenshot (full desktop) | describe (AI vision of current screen) | describe_file (analyze image at path) | pick_color | get_monitors"}, "x": {"type": "integer", "description": "X coordinate in pixels for pick_color action. User says '100, 100' or '100-100' means x=100. Must be positive integer >= 1.", "default": 0}, "y": {"type": "integer", "description": "Y coordinate in pixels for pick_color action. User says '100, 100' or '100-100' or 'at 100 and 100' means y=100. Must be positive integer >= 1.", "default": 0}, "path": {"type": "string", "description": "File path for describe_file action. Supports ~ for home directory. Example: '~/Pictures/screenshot.png'", "default": ""}}, "required": ["action"]}}},
 
     # 7. WORKSPACE_CONTROL (facade)
     {"type": "function", "function": {"name": "workspace_control", "description": "Unified workspace management: list all virtual desktops, switch to specific workspace by index (0-based). Handles all multi-desktop operations. NOTE: Workspace numbering is 0-based: 'workspace 1' = index 0, 'workspace 2' = index 1, etc. User says 'workspace ONE' or 'workspace 1' means index=1 (second workspace).", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: list | activate"}, "index": {"type": "integer", "description": "Workspace index (0-based integer). User says 'workspace 1' or 'workspace ONE' = use index 1. User says 'workspace 0' or 'first workspace' = use index 0.", "default": 0}}, "required": ["action"]}}},
@@ -2150,7 +2200,7 @@ def run_agent():
     # Command mode system message
     command_system_msg = {
         "role": "system",
-        "content": "You are a silent system orchestrator. Your ONLY job is to execute tool calls based on user intent. DO NOT output conversational text. DO NOT confirm actions. DO NOT be polite. If you need to use a tool, output ONLY the tool call. FORGET gedit and USE gnome-text-editor."
+        "content": "You are a silent system orchestrator. Your ONLY job is to execute tool calls based on user intent. DO NOT output conversational text. DO NOT confirm actions. DO NOT be polite. If you need to use a tool, output ONLY the tool call. FORGET gedit and USE gnome-text-editor. When a command requires multiple steps, make tool calls one at a time. After receiving tool results, either make another tool call or return a brief spoken summary. Keep summaries under 2 sentences."
     }
 
     # State variables
@@ -2232,49 +2282,76 @@ def run_agent():
                 retrieval_elapsed = time.time() - retrieval_start_time
                 print(f"[TIMING] ⏱️  RAG retrieval took: {retrieval_elapsed:.3f}s ({len(filtered_tools)} tools)")
 
-                print(f"[TIMING] ⏱️  Calling llama-server with {len(filtered_tools)} tools...")
+                MAX_CHAIN_STEPS = 5
+                last_tool_result = None
 
-                if DEBUG:
-                    print(f"[DEBUG] Messages sent to LLM:")
-                    for msg in command_messages:
-                        role = msg.get('role', 'unknown')
-                        content = msg.get('content', '')
-                        if len(content) > 200:
-                            content = content[:200] + "..."
-                        print(f"  [{role}]: {content}")
-                    print(f"[DEBUG] Available tools: {[t['function']['name'] for t in filtered_tools]}")
+                for chain_step in range(MAX_CHAIN_STEPS):
+                    if chain_step > 0:
+                        print(f"[CHAIN] Step {chain_step + 1}/{MAX_CHAIN_STEPS}")
 
-                llm_start_time = time.time()
-                response = call_llama_server(
-                    messages=command_messages,
-                    tools=filtered_tools,
-                    temperature=0.0,
-                    max_tokens=300  # Increased for complex reasoning (was 200)
-                )
-                llm_elapsed = time.time() - llm_start_time
-                print(f"[TIMING] ⏱️  LLM inference took: {llm_elapsed:.2f}s")
+                    if DEBUG:
+                        print(f"[DEBUG] Messages sent to LLM:")
+                        for msg in command_messages:
+                            role = msg.get('role', 'unknown')
+                            content = msg.get('content', '')
+                            if content and len(content) > 200:
+                                content = content[:200] + "..."
+                            print(f"  [{role}]: {content}")
+                        print(f"[DEBUG] Available tools: {[t['function']['name'] for t in filtered_tools]}")
 
-                if DEBUG:
-                    print(f"[DEBUG] Gemma eval_count: {response.get('eval_count', 'N/A')} tokens")
-                    print(f"[DEBUG] Response content length: {len(response['message'].get('content', ''))}")
-                    if response['message'].get('content'):
-                        print(f"[DEBUG] Content preview: {response['message']['content'][:200]}")
-                    if response['message'].get('tool_calls'):
-                        print(f"[DEBUG] Tool calls:")
-                        for tc in response['message']['tool_calls']:
-                            print(f"  - {tc['function']['name']}: {tc['function']['arguments']}")
+                    llm_start_time = time.time()
+                    response = call_llama_server(
+                        messages=command_messages,
+                        tools=filtered_tools,
+                        temperature=0.0,
+                        max_tokens=300
+                    )
+                    llm_elapsed = time.time() - llm_start_time
+                    print(f"[TIMING] ⏱️  LLM inference took: {llm_elapsed:.2f}s")
 
-                message = response['message']
-                command_messages.append(message)
+                    if DEBUG:
+                        print(f"[DEBUG] Gemma eval_count: {response.get('eval_count', 'N/A')} tokens")
+                        print(f"[DEBUG] Response content length: {len(response['message'].get('content', ''))}")
+                        if response['message'].get('content'):
+                            print(f"[DEBUG] Content preview: {response['message']['content'][:200]}")
+                        if response['message'].get('tool_calls'):
+                            print(f"[DEBUG] Tool calls:")
+                            for tc in response['message']['tool_calls']:
+                                print(f"  - {tc['function']['name']}: {tc['function']['arguments']}")
 
-                if message.get('tool_calls'):
+                    message = response['message']
+                    command_messages.append(message)
+
+                    if not message.get('tool_calls'):
+                        # LLM returned text — final answer
+                        content = message.get('content', '').strip()
+                        if content:
+                            print(f"\n[OS Feedback]: {content}")
+                            response_time = time.time() - response_start_time
+                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
+                            speak(content)
+                        elif last_tool_result:
+                            print(f"\n[OS Feedback]: {last_tool_result}")
+                            response_time = time.time() - response_start_time
+                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
+                            speak(last_tool_result)
+                        else:
+                            print("[COMMAND] ⚠️  No tool call generated. Try rephrasing or switch to chat mode.")
+                            response_time = time.time() - response_start_time
+                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
+                            speak("I'm not sure what command to run. Try rephrasing or say 'switch to chat mode'.")
+                        break
+
                     for tool_call in message['tool_calls']:
                         tool_name = tool_call['function']['name']
                         arguments = tool_call['function']['arguments']
+                        tool_call_id = tool_call.get('id', f"call_{chain_step}_{tool_name}")
 
                         # Parse JSON string to dict if needed (llama-server returns string, Ollama returns dict)
                         if isinstance(arguments, str):
                             arguments = json.loads(arguments)
+
+                        result = None
 
                         # Check if it's a direct MCP tool (no wrapper needed)
                         if tool_name in direct_mcp_tools:
@@ -2320,12 +2397,6 @@ def run_agent():
                                 else:
                                     result = f"Error: {health_msg}"
 
-                            print(f"\n[OS Feedback]: {result}")
-                            response_time = time.time() - response_start_time
-                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
-                            speak(result)
-                            command_messages = [command_system_msg]
-
                         # Check if it's a custom wrapper function
                         elif tool_name in available_tools:
                             function_to_call = available_tools[tool_name]
@@ -2341,24 +2412,31 @@ def run_agent():
                                 else:
                                     result = f"Error: {health_msg}"
 
-                            print(f"\n[OS Feedback]: {result}")
-                            response_time = time.time() - response_start_time
-                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
-                            speak(result)
-                            command_messages = [command_system_msg]
-
                         else:
-                            print(f"[COMMAND] ⚠️  Unknown tool: {tool_name}")
-                            response_time = time.time() - response_start_time
-                            print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
-                            speak(f"I don't know how to use {tool_name}")
-                            command_messages = [command_system_msg]
+                            result = f"Unknown tool: {tool_name}"
+                            print(f"[COMMAND] ⚠️  {result}")
+
+                        print(f"\n[OS Feedback]: {result}")
+                        last_tool_result = result
+
+                        # Append tool result to messages so LLM can chain
+                        command_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": str(result)
+                        })
+
                 else:
-                    # No tool call generated
-                    print("[COMMAND] ⚠️  No tool call generated. Try rephrasing or switch to chat mode.")
-                    response_time = time.time() - response_start_time
-                    print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
-                    speak("I'm not sure what command to run. Try rephrasing or say 'switch to chat mode'.")
+                    # Exhausted MAX_CHAIN_STEPS — speak whatever we have
+                    print(f"[CHAIN] ⚠️  Reached max chain steps ({MAX_CHAIN_STEPS})")
+                    if last_tool_result:
+                        response_time = time.time() - response_start_time
+                        print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
+                        speak(last_tool_result)
+
+                response_time = time.time() - response_start_time
+                print(f"[TIMING] ⏱️  Total chain time: {response_time:.2f}s")
+                command_messages = [command_system_msg]
 
             else:  # intent_type == 'conversation'
                 # CONVERSATION MODE - chat with Gemma
