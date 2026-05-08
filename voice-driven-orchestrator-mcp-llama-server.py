@@ -1315,22 +1315,15 @@ def workspace_control(action: str, index: int = 0) -> str:
                 if not workspaces:
                     return "No workspaces found"
 
+                # Find active workspace
                 active_workspace = None
-                workspace_info = []
-
                 for ws in workspaces:
-                    ws_index = ws.get('index', 0)
-                    is_active = ws.get('active', False)
-
-                    if is_active:
-                        active_workspace = ws_index
-                        workspace_info.append(f"Workspace {ws_index} (current)")
-                    else:
-                        workspace_info.append(f"Workspace {ws_index}")
+                    if ws.get('active', False):
+                        active_workspace = ws.get('index', 0)
+                        break
 
                 total = len(workspaces)
-                summary = f"You have {total} workspace{'s' if total > 1 else ''}. Current: workspace {active_workspace}. " + ", ".join(workspace_info)
-                return summary
+                return f"You have {total} workspace{'s' if total > 1 else ''}. Workspace {active_workspace} is the current workspace."
 
             except json.JSONDecodeError:
                 return result
