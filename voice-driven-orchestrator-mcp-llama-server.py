@@ -1645,6 +1645,14 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> tuple:
 
     # App name detected → force input namespace (for get_app_shortcuts + input_control)
     # Uses app_names_only (Name + GenericName fields, no keywords) to avoid false positives
+    # Single-word names that double as common verbs/nouns are excluded to prevent
+    # "Search for X in Firefox" from matching "Search" (gnome-search-panel) as the app.
+    _ambiguous_app_names = {
+        'search', 'find', 'help', 'open', 'close', 'show', 'hide', 'move',
+        'copy', 'paste', 'cut', 'print', 'share', 'save', 'run', 'start',
+        'stop', 'play', 'pause', 'resume', 'check', 'set', 'get', 'look',
+        'view', 'edit', 'type', 'click', 'select', 'switch', 'turn',
+    }
     import string
     words = [w.strip(string.punctuation) for w in user_input_lower.split()]
     words = [w for w in words if w]
@@ -1652,7 +1660,7 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> tuple:
     for n in range(len(words), 0, -1):
         for i in range(len(words) - n + 1):
             phrase = ' '.join(words[i:i+n])
-            if phrase in app_names_only:
+            if phrase in app_names_only and not (n == 1 and phrase in _ambiguous_app_names):
                 detected_app = phrase
                 if 'input' not in forced_namespaces:
                     forced_namespaces.append('input')
