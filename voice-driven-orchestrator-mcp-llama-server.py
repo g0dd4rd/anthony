@@ -423,6 +423,7 @@ def check_automation_health(auto_enable=True) -> tuple[bool, str]:
 # ----------------------------------------
 app_name_map = {}  # Global app name mapping: term → executable
 app_friendly_name = {}  # Global executable → friendly name
+app_names_only = set()  # Names + GenericNames only (no keywords), for routing
 
 # Keyboard shortcuts that may trigger save dialogs (close app/window/tab)
 # Check for dialogs only on these to avoid performance penalty on other shortcuts
@@ -439,9 +440,10 @@ def build_app_index():
     Maps natural language terms (Name, GenericName, Keywords) to executable names.
     org.gnome apps have priority and overwrite conflicts.
     """
-    global app_name_map, app_friendly_name
+    global app_name_map, app_friendly_name, app_names_only
     app_name_map = {}
     app_friendly_name = {}
+    app_names_only = set()
 
     desktop_dir = "/usr/share/applications"
 
@@ -535,12 +537,15 @@ def build_app_index():
 
         # Add mappings (case-insensitive)
         app_name_map[exec_name.lower()] = exec_name
+        app_names_only.add(exec_name.lower())
 
         if app['name']:
             app_name_map[app['name'].lower()] = exec_name
+            app_names_only.add(app['name'].lower())
 
         if app['generic_name']:
             app_name_map[app['generic_name'].lower()] = exec_name
+            app_names_only.add(app['generic_name'].lower())
 
         for keyword in app['keywords']:
             if keyword:
@@ -565,12 +570,15 @@ def build_app_index():
 
         # Add mappings (case-insensitive) - these overwrite non-gnome apps
         app_name_map[exec_name.lower()] = exec_name
+        app_names_only.add(exec_name.lower())
 
         if app['name']:
             app_name_map[app['name'].lower()] = exec_name
+            app_names_only.add(app['name'].lower())
 
         if app['generic_name']:
             app_name_map[app['generic_name'].lower()] = exec_name
+            app_names_only.add(app['generic_name'].lower())
 
         for keyword in app['keywords']:
             if keyword:
@@ -1450,6 +1458,55 @@ def cleanup_screenshots() -> str:
         return f"Error cleaning up: {str(e)}"
 
 
+def get_app_shortcuts(app_name: str) -> str:
+    """Look up keyboard shortcuts for an application."""
+    from shortcuts.gnome_shortcuts import get_shortcuts_for_app
+    import json as _json
+
+    app_lower = app_name.lower().strip()
+    shortcuts = {}
+
+    # Check curated JSON first
+    shortcuts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shortcuts")
+    json_path = os.path.join(shortcuts_dir, "app_shortcuts.json")
+    try:
+        with open(json_path) as f:
+            curated = _json.load(f)
+        # Fuzzy match: "text editor" → "text-editor", "files" → "nautilus"
+        alias_map = {
+            "text editor": "text-editor",
+            "gnome text editor": "text-editor",
+            "gnome-text-editor": "text-editor",
+            "files": "nautilus",
+            "file manager": "nautilus",
+            "image viewer": "loupe",
+            "document viewer": "papers",
+            "pdf viewer": "papers",
+            "terminal": "ptyxis",
+        }
+        lookup_key = alias_map.get(app_lower, app_lower)
+        if lookup_key in curated:
+            shortcuts.update(curated[lookup_key])
+    except Exception:
+        pass
+
+    # Check gsettings schemas
+    gs_shortcuts = get_shortcuts_for_app(app_name)
+    if gs_shortcuts:
+        shortcuts.update(gs_shortcuts)
+
+    # Filter out metadata fields
+    shortcuts = {k: v for k, v in shortcuts.items() if not k.startswith("_")}
+
+    if not shortcuts:
+        return f"No shortcuts found for '{app_name}'"
+
+    lines = [f"Shortcuts for {app_name}:"]
+    for action, shortcut in shortcuts.items():
+        lines.append(f"- {action}: {shortcut}")
+    return "\n".join(lines)
+
+
 # ========================================
 # TOOL REGISTRY
 # ========================================
@@ -1468,6 +1525,7 @@ available_tools = {
     "list_installed_applications": list_installed_applications,
     "send_notification": send_notification,
     "cleanup_screenshots": cleanup_screenshots,
+    "get_app_shortcuts": get_app_shortcuts,
 }
 
 # Direct MCP tools (forwarded without wrappers)
@@ -1493,8 +1551,8 @@ namespaces = {
         "tools": ["window_control"]
     },
     "input": {
-        "description": "Keyboard input, typing text, pressing keys, key combinations, shortcuts, mouse clicks, double clicks, dragging, scrolling pages up and down",
-        "tools": ["input_control"]
+        "description": "Keyboard input, typing text, pressing keys, key combinations, shortcuts, mouse clicks, double clicks, dragging, scrolling pages up and down. Look up app-specific keyboard shortcuts before performing in-app actions.",
+        "tools": ["input_control", "get_app_shortcuts"]
     },
     "audio": {
         "description": "Sound volume control, mute, unmute, audio levels. Media playback control - play, pause, stop, next track, previous track, music control, audio player control",
@@ -1533,8 +1591,9 @@ if not ensure_server_running(force_restart=RESTART_SERVER):
     print("[SERVER] ❌ Failed to start llama-server. Exiting.")
     sys.exit(1)
 
-def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> list:
-    """Retrieve most relevant namespaces using semantic similarity + verb routing."""
+def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> tuple:
+    """Retrieve most relevant namespaces using semantic similarity + verb routing.
+    Returns (namespaces_list, detected_app_name_or_None)."""
     from sentence_transformers.util import cos_sim
 
     user_input_lower = user_input.lower()
@@ -1549,6 +1608,25 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> list:
     if any(verb in user_input_lower for verb in window_verbs):
         if 'window' not in forced_namespaces:
             forced_namespaces.append('window')
+
+    # App name detected → force input namespace (for get_app_shortcuts + input_control)
+    # Uses app_names_only (Name + GenericName fields, no keywords) to avoid false positives
+    import string
+    words = [w.strip(string.punctuation) for w in user_input_lower.split()]
+    words = [w for w in words if w]
+    detected_app = None
+    for n in range(len(words), 0, -1):
+        for i in range(len(words) - n + 1):
+            phrase = ' '.join(words[i:i+n])
+            if phrase in app_names_only:
+                detected_app = phrase
+                if 'input' not in forced_namespaces:
+                    forced_namespaces.append('input')
+                    print(f"[ROUTING] Detected app '{phrase}' → forcing input namespace")
+                break
+        else:
+            continue
+        break
 
     # If we forced namespaces, reduce top_k to make room
     adjusted_top_k = max(1, top_k - len(forced_namespaces))
@@ -1576,7 +1654,7 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> list:
         forced_marker = " [FORCED]" if ns in forced_namespaces else ""
         print(f"  {i+1}. {ns} (score: {score:.3f}) - {len(namespaces[ns]['tools'])} tools{forced_marker}")
 
-    return relevant_namespaces
+    return relevant_namespaces, detected_app
 
 def build_filtered_tool_schema(relevant_namespaces: list) -> list:
     """Build filtered tool schema from relevant namespaces."""
@@ -1607,7 +1685,10 @@ tool_schema_full = [
     {"type": "function", "function": {"name": "window_control", "description": "Unified window management: list windows, focus/close/minimize/maximize/restore windows, take window screenshots or area screenshots, move and resize windows. Matches windows by application name (e.g., 'text editor', 'firefox', 'nautilus'). Empty window_name = current window. For move_resize: left half of 1920x1080 screen = x:0, y:0, width:960, height:1080. Right half = x:960, y:0, width:960, height:1080.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action to perform: list | focus | close | minimize | maximize | restore | screenshot | screenshot_area | move_resize"}, "window_name": {"type": "string", "description": "Application name (e.g., 'text editor'). Leave empty for current window.", "default": ""}, "x": {"type": "integer", "description": "X position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "y": {"type": "integer", "description": "Y position in pixels for move_resize or screenshot_area. Must be integer, NOT percentage.", "default": 0}, "width": {"type": "integer", "description": "Width in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For left/right half: use 960 pixels on 1920 wide screen.", "default": 800}, "height": {"type": "integer", "description": "Height in pixels for move_resize or screenshot_area. Must be integer, NOT percentage. For full height: use 1080 pixels on 1080 tall screen.", "default": 600}, "include_frame": {"type": "boolean", "description": "Include window borders in screenshot", "default": True}}, "required": ["action"]}}},
 
     # 3. INPUT_CONTROL (facade)
-    {"type": "function", "function": {"name": "input_control", "description": "Unified input control: type text, press key combos (Ctrl+C, Alt+Tab), press single keys, mouse click/double-click, drag and drop (supports both natural positions like 'left', 'right' and exact coordinates), scroll pages up/down. Handles all keyboard and mouse operations. Use application-specific keyboard shortcuts to achieve the goal (e.g., Ctrl+L to focus address bar before typing a URL, Ctrl+T for new tab).", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: type | key_combo | key_press | click | double_click | drag | scroll"}, "text": {"type": "string", "description": "Text to type (for 'type' action)", "default": ""}, "keys": {"type": "string", "description": "Key combo like 'Ctrl+c' or single key like 'Enter'", "default": ""}, "x": {"type": "integer", "description": "X coordinate for click or drag start", "default": 0}, "y": {"type": "integer", "description": "Y coordinate for click or drag start", "default": 0}, "to_x": {"type": "integer", "description": "Drag end X coordinate", "default": 0}, "to_y": {"type": "integer", "description": "Drag end Y coordinate", "default": 0}, "from_position": {"type": "string", "description": "Natural language start position for drag: 'left', 'right', 'center', 'top left', etc.", "default": "center"}, "to_position": {"type": "string", "description": "Natural language end position for drag: 'left', 'right', 'center', 'bottom right', etc.", "default": "center"}, "direction": {"type": "string", "description": "Scroll direction: 'up' or 'down'", "default": "down"}, "amount": {"type": "integer", "description": "Scroll amount (number of times)", "default": 1}, "button": {"type": "integer", "description": "Mouse button: 1=left, 2=middle, 3=right", "default": 1}}, "required": ["action"]}}},
+    {"type": "function", "function": {"name": "input_control", "description": "Unified input control: type text, press key combos, press single keys, mouse click/double-click, drag and drop, scroll. Use get_app_shortcuts to look up the correct shortcut before pressing keys.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: type | key_combo | key_press | click | double_click | drag | scroll"}, "text": {"type": "string", "description": "Text to type (for 'type' action)", "default": ""}, "keys": {"type": "string", "description": "Key combo like 'Ctrl+c' or single key like 'Enter'", "default": ""}, "x": {"type": "integer", "description": "X coordinate for click or drag start", "default": 0}, "y": {"type": "integer", "description": "Y coordinate for click or drag start", "default": 0}, "to_x": {"type": "integer", "description": "Drag end X coordinate", "default": 0}, "to_y": {"type": "integer", "description": "Drag end Y coordinate", "default": 0}, "from_position": {"type": "string", "description": "Natural language start position for drag: 'left', 'right', 'center', 'top left', etc.", "default": "center"}, "to_position": {"type": "string", "description": "Natural language end position for drag: 'left', 'right', 'center', 'bottom right', etc.", "default": "center"}, "direction": {"type": "string", "description": "Scroll direction: 'up' or 'down'", "default": "down"}, "amount": {"type": "integer", "description": "Scroll amount (number of times)", "default": 1}, "button": {"type": "integer", "description": "Mouse button: 1=left, 2=middle, 3=right", "default": 1}}, "required": ["action"]}}},
+
+    # 4. GET_APP_SHORTCUTS (standalone)
+    {"type": "function", "function": {"name": "get_app_shortcuts", "description": "Look up keyboard shortcuts for a specific application. Call this before using input_control key_combo/key_press to find the correct shortcut for an action. Returns a list of available shortcuts.", "parameters": {"type": "object", "properties": {"app_name": {"type": "string", "description": "Application name (e.g., 'firefox', 'text editor', 'nautilus', 'terminal', 'gnome' for desktop-wide shortcuts)"}}, "required": ["app_name"]}}},
 
     # 4. AUDIO_CONTROL (facade)
     {"type": "function", "function": {"name": "audio_control", "description": "Unified audio control: volume (set/increase/decrease), mute, unmute, media playback (play, pause, play_pause toggle, next, previous, stop). Handles all sound and media controls.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: volume | mute | unmute | play | pause | play_pause | next | previous | stop"}, "level": {"type": "integer", "description": "Volume level: 0-100 absolute, or +/- for relative change", "default": 0}, "relative": {"type": "boolean", "description": "True for relative volume change (+/-), false for absolute", "default": False}}, "required": ["action"]}}},
@@ -2275,7 +2356,19 @@ def run_agent():
                 # Hybrid namespace + retrieval approach
                 # Retrieve top 2 most relevant namespaces for this query (faster inference)
                 retrieval_start_time = time.time()
-                relevant_namespaces = retrieve_relevant_namespaces(user_input, top_k=2)
+                relevant_namespaces, detected_app = retrieve_relevant_namespaces(user_input, top_k=2)
+
+                # Auto-focus: if an app was detected, focus its window before LLM acts
+                if detected_app:
+                    try:
+                        focus_result = window_control("focus", detected_app)
+                        if "No window found" in focus_result:
+                            print(f"[ROUTING] App '{detected_app}' not running, skipping auto-focus")
+                        else:
+                            print(f"[ROUTING] Auto-focused: {focus_result}")
+                            command_messages[-1]["content"] += f"\n[{detected_app} is already focused. Do NOT open or search for it.]"
+                    except Exception as e:
+                        print(f"[ROUTING] Auto-focus failed: {e}")
 
                 # Build filtered tool schema with only relevant tools
                 filtered_tools = build_filtered_tool_schema(relevant_namespaces)
