@@ -1006,10 +1006,7 @@ def input_control(action: str, text: str = "", keys: str = "",
 
         # KEY_COMBO
         elif action == "key_combo":
-            # Normalize key combo
             normalized = keys
-            normalized = normalized.replace("control", "Ctrl").replace("Control", "Ctrl").replace("ctrl", "Ctrl")
-            normalized = normalized.replace("alt", "Alt").replace("shift", "Shift").replace("super", "Super")
             if " " in normalized and "+" not in normalized:
                 normalized = normalized.replace(" ", "+")
 
