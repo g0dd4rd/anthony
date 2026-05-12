@@ -1438,6 +1438,37 @@ def workspace_control(action: str, index: int = 0) -> str:
 # STANDALONE TOOLS (low frequency)
 # ========================================
 
+def get_battery_status() -> str:
+    """Return battery percentage, state, and time remaining."""
+    try:
+        result = subprocess.run(
+            ["upower", "-i", "/org/freedesktop/UPower/devices/battery_BAT0"],
+            capture_output=True, text=True, check=True
+        )
+        info = {}
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("percentage:"):
+                info["percentage"] = line.split(":")[-1].strip()
+            elif line.startswith("state:"):
+                info["state"] = line.split(":")[-1].strip()
+            elif line.startswith("time to empty:"):
+                info["remaining"] = line.split(":")[-1].strip()
+            elif line.startswith("time to full:"):
+                info["remaining"] = line.split(":")[-1].strip()
+
+        pct = info.get("percentage", "unknown")
+        state = info.get("state", "unknown")
+        remaining = info.get("remaining")
+
+        msg = f"Battery is at {pct}, {state}"
+        if remaining:
+            msg += f", {remaining} remaining"
+        return msg + "."
+    except Exception:
+        return "Could not read battery status."
+
+
 def get_datetime() -> str:
     """Return the current date, time, and day of week."""
     from datetime import datetime
@@ -2503,6 +2534,16 @@ def run_agent():
                     result = get_datetime()
                     speak(result)
                     log_and_print(f"[ROUTING] Short-circuit: datetime query, skipping LLM")
+                    log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
+                    continue
+
+                # Short-circuit: battery queries
+                _battery_phrases = ('battery', 'charge level', 'power level',
+                                    'how much charge', 'how much power')
+                if any(p in user_input_lower for p in _battery_phrases):
+                    result = get_battery_status()
+                    speak(result)
+                    log_and_print(f"[ROUTING] Short-circuit: battery query, skipping LLM")
                     log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
                     continue
 
