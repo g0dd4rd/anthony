@@ -2418,12 +2418,14 @@ def run_agent():
                 relevant_namespaces, detected_app = retrieve_relevant_namespaces(user_input, top_k=2)
 
                 # Auto-focus: if an app was detected, focus its window before LLM acts
+                auto_focused = False
                 if detected_app:
                     try:
                         focus_result = window_control("focus", detected_app)
                         if "No window found" in focus_result:
                             log_and_print(f"[ROUTING] App '{detected_app}' not running, skipping auto-focus", level='warning')
                         else:
+                            auto_focused = True
                             log_and_print(f"[ROUTING] Auto-focused: {focus_result}")
                             command_messages[-1]["content"] += f"\n[{detected_app} is already focused. Do NOT open or search for it.]"
                     except Exception as e:
@@ -2462,6 +2464,21 @@ def run_agent():
                                         relevant_namespaces.append('input')
                     except Exception as e:
                         log_and_print(f"[ROUTING] Focused-window shortcut lookup failed: {e}")
+
+                # Short-circuit: if routing already handled a pure focus/switch command, skip the LLM
+                # Only triggers when the entire command is just "verb + app name" with nothing else
+                if auto_focused and detected_app:
+                    _focus_verbs = ('switch to', 'focus', 'go to', 'open')
+                    is_focus_only = any(
+                        user_input_lower.startswith(v) and user_input_lower[len(v):].strip().rstrip('.') == detected_app
+                        for v in _focus_verbs
+                    )
+                    if is_focus_only:
+                        friendly = get_friendly_app_name(detected_app)
+                        speak(f"Switched to {friendly}.")
+                        log_and_print(f"[ROUTING] Short-circuit: focus-only command, skipping LLM")
+                        log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
+                        continue
 
                 # Build filtered tool schema with only relevant tools
                 filtered_tools = build_filtered_tool_schema(relevant_namespaces)
