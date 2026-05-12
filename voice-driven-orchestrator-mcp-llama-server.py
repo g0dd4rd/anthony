@@ -2,9 +2,9 @@
 """
 Voice-Driven Desktop Orchestrator with CONSOLIDATED TOOLS (Facade Pattern)
 
-This version uses the facade pattern to consolidate 34 individual tools into 10 tools:
+This version uses the facade pattern to consolidate 34 individual tools into 11 tools:
 - 6 facade tools (window_control, input_control, audio_control, system_settings, vision_control, workspace_control)
-- 3 standalone tools (list_installed_applications, send_notification, cleanup_screenshots)
+- 4 standalone tools (list_installed_applications, send_notification, cleanup_screenshots, get_datetime)
 - 1 search tool (gnome_search)
 
 Benefits:
@@ -1438,6 +1438,15 @@ def workspace_control(action: str, index: int = 0) -> str:
 # STANDALONE TOOLS (low frequency)
 # ========================================
 
+def get_datetime() -> str:
+    """Return the current date, time, and day of week."""
+    from datetime import datetime
+    import locale
+    locale.setlocale(locale.LC_TIME, '')
+    now = datetime.now()
+    return now.strftime("It is %c.")
+
+
 def list_installed_applications() -> str:
     """Lists all installed GUI applications on the system."""
     log_and_print(f"\n[SYSTEM] Scanning for installed applications...")
@@ -1573,6 +1582,7 @@ available_tools = {
     "send_notification": send_notification,
     "cleanup_screenshots": cleanup_screenshots,
     "get_app_shortcuts": get_app_shortcuts,
+    "get_datetime": get_datetime,
 }
 
 # Direct MCP tools (forwarded without wrappers)
@@ -1618,8 +1628,8 @@ namespaces = {
         "tools": ["workspace_control"]
     },
     "system": {
-        "description": "System tasks: list installed applications (show apps, what apps are installed), send desktop notifications (notify me, remind me, alert me in X minutes), clean up screenshots (delete screenshots, remove screenshots, cleanup temp files), enable or disable automation",
-        "tools": ["list_installed_applications", "send_notification", "cleanup_screenshots", "set_enabled"]
+        "description": "System tasks: list installed applications (show apps, what apps are installed), send desktop notifications (notify me, remind me, alert me in X minutes), clean up screenshots (delete screenshots, remove screenshots, cleanup temp files), enable or disable automation, get current date and time (what time is it, what's today's date, what day is it)",
+        "tools": ["list_installed_applications", "send_notification", "cleanup_screenshots", "set_enabled", "get_datetime"]
     }
 }
 
@@ -1767,6 +1777,9 @@ tool_schema_full = [
 
     # 10. CLEANUP_SCREENSHOTS (standalone)
     {"type": "function", "function": {"name": "cleanup_screenshots", "description": "Remove all temporary screenshot files to free disk space. Use for maintenance, cleanup tasks.", "parameters": {"type": "object", "properties": {}}}},
+
+    # 11. GET_DATETIME (standalone)
+    {"type": "function", "function": {"name": "get_datetime", "description": "Get the current date, time, and day of week. Use for 'what time is it', 'what's the date', 'what day is it'.", "parameters": {"type": "object", "properties": {}}}},
 ]
 
 # Initially, use all tools (will be filtered dynamically during execution)
@@ -2479,6 +2492,19 @@ def run_agent():
                         log_and_print(f"[ROUTING] Short-circuit: focus-only command, skipping LLM")
                         log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
                         continue
+
+                # Short-circuit: date/time queries
+                _time_phrases = ('what time', 'what\'s the time', 'what is the time',
+                                 'what date', 'what\'s the date', 'what is the date',
+                                 'what day', 'what\'s the day', 'what is the day',
+                                 'current time', 'current date', 'tell me the time',
+                                 'tell me the date')
+                if any(p in user_input_lower for p in _time_phrases):
+                    result = get_datetime()
+                    speak(result)
+                    log_and_print(f"[ROUTING] Short-circuit: datetime query, skipping LLM")
+                    log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
+                    continue
 
                 # Build filtered tool schema with only relevant tools
                 filtered_tools = build_filtered_tool_schema(relevant_namespaces)
