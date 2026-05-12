@@ -1985,6 +1985,20 @@ def strip_markdown(text: str) -> str:
     return text
 
 
+_TTS_FILLERS = ["Okay,", "Done,", "Alright,", "Sure,"]
+_tts_filler_index = 0
+
+def _pad_short_text(text: str) -> str:
+    """Pad short text with a filler prefix to avoid piper mispronunciation."""
+    global _tts_filler_index
+    if len(text.split()) < 5:
+        filler = _TTS_FILLERS[_tts_filler_index % len(_TTS_FILLERS)]
+        _tts_filler_index += 1
+        text = f"{filler} {text[0].lower()}{text[1:]}"
+    if not text.endswith(('.', '!', '?')):
+        text += '.'
+    return text
+
 def speak(text: str):
     """Converts text to neural speech and plays it."""
     log_and_print(f"\n[Agent]: {text}")
@@ -1996,6 +2010,7 @@ def speak(text: str):
 
     # Strip markdown formatting for better TTS
     clean_text = strip_markdown(text)
+    clean_text = _pad_short_text(clean_text)
 
     temp_audio_path = "/tmp/agent_response.wav"
     try:
