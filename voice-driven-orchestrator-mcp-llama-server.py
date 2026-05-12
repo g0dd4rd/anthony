@@ -2722,6 +2722,55 @@ def run_agent():
                 if window_handled:
                     continue
 
+                # Short-circuit: window tiling ("move X to the right half", "tile X left")
+                _tile_positions = {
+                    'left half':      lambda w, h: (0, 0, w // 2, h),
+                    'right half':     lambda w, h: (w // 2, 0, w // 2, h),
+                    'top half':       lambda w, h: (0, 0, w, h // 2),
+                    'bottom half':    lambda w, h: (0, h // 2, w, h // 2),
+                    'top left':       lambda w, h: (0, 0, w // 2, h // 2),
+                    'top right':      lambda w, h: (w // 2, 0, w // 2, h // 2),
+                    'bottom left':    lambda w, h: (0, h // 2, w // 2, h // 2),
+                    'bottom right':   lambda w, h: (w // 2, h // 2, w // 2, h // 2),
+                    'left side':      lambda w, h: (0, 0, w // 2, h),
+                    'right side':     lambda w, h: (w // 2, 0, w // 2, h),
+                    'the left':       lambda w, h: (0, 0, w // 2, h),
+                    'the right':      lambda w, h: (w // 2, 0, w // 2, h),
+                    'center':         lambda w, h: (w // 4, h // 4, w // 2, h // 2),
+                }
+                tile_handled = False
+                if any(p in user_input_lower for p in ('move', 'tile', 'snap', 'put')):
+                    for position, calc_fn in _tile_positions.items():
+                        if position in user_input_lower:
+                            app_to_tile = detected_app
+                            if not app_to_tile:
+                                try:
+                                    win_list = json.loads(mcp_client.call_tool("list_windows", {}))
+                                    focused = next((w for w in win_list if w.get('focused', False)), None)
+                                    if focused:
+                                        app_to_tile = focused.get('wmClass', '')
+                                except Exception:
+                                    pass
+                            if app_to_tile:
+                                try:
+                                    mon_result = mcp_client.call_tool("get_monitors", {})
+                                    monitors = json.loads(mon_result)
+                                    primary = next((m for m in monitors if m.get('primary')), monitors[0])
+                                    scr_w = primary['width']
+                                    scr_h = primary['height']
+                                    tx, ty, tw, th = calc_fn(scr_w, scr_h)
+                                    result = window_control("move_resize", app_to_tile, x=tx, y=ty, width=tw, height=th)
+                                    friendly = get_friendly_app_name(app_to_tile) if app_to_tile else "Window"
+                                    speak(f"Moved {friendly} to the {position}.")
+                                    log_and_print(f"[ROUTING] Short-circuit: tile {app_to_tile} to {position}, skipping LLM")
+                                    log_and_print(f"[TIMING] ⏱️  Response time: {time.time() - retrieval_start_time:.2f}s (no LLM)")
+                                    tile_handled = True
+                                except Exception as e:
+                                    log_and_print(f"[ROUTING] Tiling failed: {e}", level='warning')
+                            break
+                if tile_handled:
+                    continue
+
                 # Short-circuit: audio controls
                 audio_handled = False
                 # Mute / unmute
