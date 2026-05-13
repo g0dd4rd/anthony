@@ -79,6 +79,11 @@ Examples of COMMAND:
 - "remove screenshots"
 - "list workspaces"
 - "switch to workspace 1"
+- "install vlc"
+- "install irc client"
+- "uninstall vlc"
+- "download firefox"
+- "remove hexchat"
 
 Examples of CONVERSATION:
 - "what is docker"

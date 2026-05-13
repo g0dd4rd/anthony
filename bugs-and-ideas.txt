@@ -1,0 +1,59 @@
+Bugs and Ideas
+
+11. Media controls (play, pause, next, prev, stop) - Tested: pass (next/prev n/a for Decibels)
+12. Wallpaper - Tested: pass
+22. Create different personas for the LLM for conversation mode
+23. i18n of Anthony speak output
+24. Extract JSON parts from orchestrator into separate files for readability - Done (config/ module: tool_schemas, namespaces, prompts)
+26. faster-whisper drops spaces from filenames ("bugs and ideas.txt")
+27. Implement tools for log out, restart, shut down - Done (with voice confirmation)
+28. What features would benefit handicapped users the most?
+29. "Undo last action" - safety net for voice commands
+30. "Read this to me" - read selected text or clipboard aloud
+32. What's the time, date? - Done
+33. Use webcam + vision model to describe the room
+34. App shortcuts list per app, injected into LLM context - Done
+35. Non-obtrusive push-to-speak key (currently Enter)
+36. Fn+S takes a screenshot
+37. Install apps via Software - Done (flatpak+dnf search, voice confirmation, short-circuit)
+38. Inject ARIA labels into inaccessible web pages
+39. Improve gnome/file search tool
+40. Battery status - Done
+41. Read notifications
+42. Train GNOME desktop model or LoRA fine-tuning
+43. Switch faster-whisper to medium model, or provide language settings
+44. Move as many tools as possible to the MCP server
+45. Handle arbitrary app dialogs (exit/close already handled)
+47. Curate and verify app shortcuts JSON (name, version, correctness) - includes old #46 - Done (15 apps, versions verified, routing aliases unified)
+48. Webcam visual+audio guides for optimal camera positioning
+49. Figure out if gnome-shell unsafe mode is really necessary
+50. Figure out GNOME integration (extension, system service?)
+51. Create rpm/flatpak/docker/app image
+53. Track flatpak apps + update list after install/uninstall - includes old #52 - Done (Gio.AppInfo replaces manual .desktop scanning)
+55. Generalize command structure + help page - includes old #54
+57. Use dogtail/qecore/behave for in-app commands + action verification - includes old #56, #60
+58. Ensure all dependencies satisfied before first use, including models - Partial: DEPENDENCIES.md created
+61. Teach the orchestrator to auto-update app shortcuts
+62. Give the LLM ability to search the web (local model is not up-to-date)
+63. Safe word to stop the current command execution
+64. Fix the automation disabled bug - Done (indicator toggle now syncs on D-Bus SetEnabled)
+65. Rewrite to Rust?
+66. Crash on truncated LLM JSON - needs try/except around tool call parsing (from test: wallpaper crash) - Done
+67. Screenshot false positives - says taken but wasn't, no path in response (from test: 2.7, 2.8) - Done
+68. Move/resize doesn't tile properly ("right half" just centered vertically) (from test: 2.9) - Done
+69. "Type hello world" fails (from test: 3.1) - Done (works, types into focused window as expected)
+70. LLM should report when app is already running (from test: 1.4) - Done
+71. LLM should announce already-focused window (from test: 2.2) - Done
+72. Workspace response uses 0-based index instead of user-friendly numbering (from test: 7.2) - Done
+73. TTS pronunciation issues ("crawl down" instead of "scroll down") (from test: 3.8) - Done (pad short text with filler prefix)
+74. Avoid coordinate-based click/double-click under Wayland - use AT-SPI (from test: 3.5, 3.6)
+75. Evaluate diffusion LLMs (dLLMs) as Gemma replacement - LLaDA 2.0-mini (16B, 1.4B active, tool calling, open source) could give 50-100x speedup. Blocker: llama-server doesn't support diffusion decoding yet
+76. Client-server split for remote deployment (Beaker/GPU) - local: mic→Whisper STT→text, remote: text→orchestrator→LLM→GNOME. Needs socket-based text input mode and audio streaming back
+77. Extract facade tools (window, input, audio, settings, vision, workspace) into tools/facades.py (~700 lines)
+78. Extract standalone tools (battery, brightness, power, datetime, notifications, etc.) into tools/standalone.py (~250 lines)
+79. Extract voice I/O (TTS, VAD, STT) into voice/ module (~340 lines)
+80. Extract conversation mode (classifier, handler) into conversation.py (~90 lines)
+81. Extract app index + routing (build_app_index, smart_match, aliases, embeddings) into app_index.py (~280 lines)
+82. Break up run_agent() (743 lines) into dispatcher, tool executor, and LLM loop
+83. End-to-end test harness: inject text commands into run_agent(), verify results with dogtail (AT-SPI) for UI state and D-Bus/gsettings for non-UI state (volume, wallpaper)
+84. Add skills to apps that lack them (papers, loupe, showtime, decibels, calculator, clocks, boxes, baobab, simple-scan)

@@ -12,12 +12,12 @@ When presenting online with screen recording/streaming, you need to:
 
 **For presentations, run:**
 ```bash
-./voice-driven-orchestrator-mcp-llama-server.py --ptt
+./orchestrator.py --ptt
 ```
 
 **For normal use:**
 ```bash
-./voice-driven-orchestrator-mcp-llama-server.py
+./orchestrator.py
 ```
 
 ### How It Works
@@ -51,7 +51,7 @@ When presenting online with screen recording/streaming, you need to:
 3. Start recording
 
 **Orchestrator:**
-1. Start in PTT mode: `./voice-driven-orchestrator-mcp-llama-server.py --ptt`
+1. Start in PTT mode: `./orchestrator.py --ptt`
 2. During presentation:
    - Talk normally to audience (headset mic)
    - When you want to demo a command:
@@ -171,7 +171,7 @@ Press Ctrl+C to exit
 ./start_llama_server.sh
 
 # Terminal 2: Start orchestrator in PTT mode
-./voice-driven-orchestrator-mcp-llama-server.py --ptt
+./orchestrator.py --ptt
 
 # Terminal 3: Your presentation notes / Kooha recording
 

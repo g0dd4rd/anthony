@@ -15,7 +15,7 @@
 - OpenAI-compatible API
 
 ### Step 3: Updated Orchestrator
-- Created: `voice-driven-orchestrator-mcp-llama-server.py`
+- Created: `orchestrator.py`
 - Replaced `ollama.chat()` with `call_llama_server()` HTTP calls
 - Kept Ollama fallback for vision tasks (images not yet supported in llama-server)
 - Updated all 4 inference locations:
@@ -65,7 +65,7 @@ The orchestrator now automatically manages llama-server lifecycle!
 ```bash
 cd ~/anthony
 # Just run the orchestrator - it starts llama-server automatically
-./voice-driven-orchestrator-mcp-llama-server.py
+./orchestrator.py
 ```
 
 **First run:** Starts llama-server (~5s startup time)  
@@ -132,7 +132,7 @@ response = call_llama_server(
 |------|---------|------|
 | `~/models/gemma4-e4b-q4km.gguf` | Converted model (GPU-optimized) | 5GB |
 | `~/models/gemma4-e4b-fp16.gguf` | Full precision (can delete) | 15GB |
-| `voice-driven-orchestrator-mcp-llama-server.py` | Updated orchestrator | - |
+| `orchestrator.py` | Updated orchestrator | - |
 | `start_llama_server.sh` | Server startup script | - |
 | `download_and_convert_gemma4.sh` | Model conversion script | - |
 
@@ -143,7 +143,7 @@ response = call_llama_server(
    - This is fine for now since vision is rarely used
 
 2. **Port 8081 must be free** - If blocked, change port in:
-   - `voice-driven-orchestrator-mcp-llama-server.py` (LLAMA_SERVER_CONFIG)
+   - `orchestrator.py` (LLAMA_SERVER_CONFIG)
 
 ## 🧪 Testing
 
