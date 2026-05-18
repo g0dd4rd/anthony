@@ -57,3 +57,5 @@ Bugs and Ideas
 82. Break up run_agent() (743 lines) into dispatcher, tool executor, and LLM loop
 83. End-to-end test harness: inject text commands into run_agent(), verify results with dogtail (AT-SPI) for UI state and D-Bus/gsettings for non-UI state (volume, wallpaper)
 84. Add skills to apps that lack them (papers, loupe, showtime, decibels, calculator, clocks, boxes, baobab, simple-scan)
+85. Run long-running tasks (install/uninstall) in background thread instead of blocking the voice loop
+86. Research: distill a small gnome-desktop-ai model from Gemma 4, using RAG + fetch_from_web tool to compensate for limited conversational knowledge

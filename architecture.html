@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anthony - Architecture Overview</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --accent2: #0ea5e9;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #8b5cf6;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --border: #334155;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  header {
+    text-align: center;
+    padding: 3rem 2rem 2rem;
+    background: linear-gradient(135deg, var(--surface) 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  header h1 span { color: var(--accent); }
+  header p {
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(26, 26, 46, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 2rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  nav a:hover, nav a.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  section {
+    margin-bottom: 3rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  h2 .badge {
+    font-size: 0.7rem;
+    background: var(--accent);
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin: 1rem 0 0.5rem;
+    color: var(--accent2);
+  }
+
+  /* Data flow diagram */
+  .flow-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    align-items: center;
+    margin: 1.5rem 0;
+  }
+  .flow-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    width: 100%;
+    max-width: 700px;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .flow-step:hover {
+    border-color: var(--accent2);
+    transform: translateX(4px);
+  }
+  .flow-step .step-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+  }
+  .flow-step .step-detail {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+  .flow-step .step-file {
+    font-size: 0.75rem;
+    color: var(--accent5);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  .flow-arrow {
+    width: 2px;
+    height: 24px;
+    background: var(--border);
+    position: relative;
+  }
+  .flow-arrow::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: -4px;
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid var(--accent2);
+    border-bottom: 2px solid var(--accent2);
+    transform: rotate(45deg);
+  }
+  .flow-branch {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+    max-width: 700px;
+  }
+  .flow-branch .flow-step {
+    flex: 1;
+  }
+  .flow-branch-label {
+    font-size: 0.75rem;
+    color: var(--accent4);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0.5rem 0 0.25rem;
+    text-align: center;
+    width: 100%;
+    max-width: 700px;
+  }
+
+  /* Module cards */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+  .module-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .module-card:hover {
+    border-color: var(--accent2);
+    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.1);
+  }
+  .module-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .module-card .card-title {
+    font-weight: 700;
+    font-size: 1rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    color: var(--accent2);
+  }
+  .module-card .card-lines {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    background: var(--surface2);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
+  .module-card .card-desc {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+  }
+  .module-card .card-exports {
+    font-size: 0.8rem;
+  }
+  .module-card .card-exports span {
+    display: inline-block;
+    background: var(--surface2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    margin: 0.15rem 0.15rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+  }
+
+  /* Tool tables */
+  .tool-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 1rem 0;
+  }
+  .tool-table th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--accent2);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .tool-table td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .tool-table tr:hover td {
+    background: rgba(14, 165, 233, 0.05);
+  }
+  .tool-table code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    color: var(--accent3);
+  }
+  .tool-table .ops {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  /* Init sequence */
+  .init-seq {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  .init-seq .step {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+  .init-seq .step-num {
+    color: var(--text-dim);
+    min-width: 1.5rem;
+    text-align: right;
+  }
+  .init-seq .step-code {
+    color: var(--text);
+  }
+  .init-seq .step-code .fn { color: var(--accent2); }
+  .init-seq .step-code .mod { color: var(--accent3); }
+  .init-seq .step-code .arg { color: var(--accent4); }
+  .init-seq .step-code .comment { color: var(--text-dim); font-style: italic; }
+  .init-seq .step-arrow {
+    color: var(--accent);
+    margin: 0 0.25rem;
+  }
+
+  /* External systems */
+  .ext-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+  .ext-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .ext-card h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .ext-card .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .ext-card ul {
+    list-style: none;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+  .ext-card li {
+    padding: 0.15rem 0;
+  }
+  .ext-card li::before {
+    content: '>';
+    color: var(--accent2);
+    margin-right: 0.5rem;
+    font-family: monospace;
+  }
+
+  /* Dependency graph (SVG) */
+  .dep-graph {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+  .dep-graph svg text {
+    font-family: 'Inter', sans-serif;
+    fill: var(--text);
+  }
+  .dep-graph svg .node-rect {
+    rx: 8;
+    ry: 8;
+  }
+  .dep-graph svg .edge {
+    stroke: var(--border);
+    stroke-width: 1.5;
+    fill: none;
+    marker-end: url(#arrowhead);
+  }
+  .dep-graph svg .edge-init {
+    stroke: var(--accent2);
+    stroke-dasharray: 6 3;
+  }
+  .dep-graph svg .edge-import {
+    stroke: var(--accent3);
+  }
+
+  /* Safety section */
+  .safety-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.75rem;
+  }
+  .safety-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  .safety-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 1.5rem;
+    text-align: center;
+  }
+
+  /* Performance */
+  .perf-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+  }
+  .perf-bar .label {
+    min-width: 180px;
+    color: var(--text-dim);
+  }
+  .perf-bar .bar {
+    flex: 1;
+    height: 20px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .perf-bar .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+  .perf-bar .bar-value {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Shortcircuit list */
+  .sc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem;
+    font-size: 0.8rem;
+  }
+  .sc-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sc-item .sc-cmd { color: var(--text); }
+  .sc-item .sc-skip {
+    font-size: 0.7rem;
+    color: var(--accent3);
+    font-family: monospace;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>Anthony</span> Architecture</h1>
+  <p>Voice-driven desktop orchestrator for GNOME, powered by local LLM inference with Gemma 4 on Intel Arc via Vulkan</p>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">13</div>
+      <div class="stat-label">Tool schemas</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">36+</div>
+      <div class="stat-label">Operations</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">20+</div>
+      <div class="stat-label">Short-circuits</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">~3K</div>
+      <div class="stat-label">Lines of code</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">8</div>
+      <div class="stat-label">Modules</div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <a href="#data-flow">Data Flow</a>
+  <a href="#modules">Modules</a>
+  <a href="#dep-graph">Dependencies</a>
+  <a href="#tools">Tools</a>
+  <a href="#external">External Systems</a>
+  <a href="#init">Init Sequence</a>
+  <a href="#performance">Performance</a>
+  <a href="#safety">Safety</a>
+</nav>
+
+<main>
+
+<!-- DATA FLOW -->
+<section id="data-flow">
+  <h2>Data Flow</h2>
+
+  <div class="flow-diagram">
+
+    <div class="flow-step" style="border-color: var(--accent4);">
+      <div class="step-label">User speaks</div>
+      <div class="step-detail">Continuous listening via microphone, no wake word needed</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step">
+      <div class="step-label">VAD - Silero Voice Activity Detection</div>
+      <div class="step-detail">Pre-buffer 0.3s, detect speech (threshold 0.5), record until 1.0s silence, min 0.5s speech</div>
+      <div class="step-file">voice_io.py &mdash; is_speech(), listen_and_transcribe()</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step">
+      <div class="step-label">STT - Faster-Whisper</div>
+      <div class="step-detail">medium.en model, CPU int8, beam_size=5, VAD filter enabled</div>
+      <div class="step-file">voice_io.py &mdash; whisper_model.transcribe()</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step">
+      <div class="step-label">Mode Router</div>
+      <div class="step-detail">Explicit mode switching: "switch to chat/command mode". Default: command mode.</div>
+      <div class="step-file">orchestrator.py &mdash; run_agent()</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-branch-label">Routes to one of two modes</div>
+    <div class="flow-branch">
+      <div class="flow-step" style="border-color: var(--accent3);">
+        <div class="step-label">Command Mode</div>
+        <div class="step-detail">App detection, auto-focus, shortcut injection, short-circuit checks, then RAG + LLM tool calling</div>
+        <div class="step-file">orchestrator.py + app_index.py</div>
+      </div>
+      <div class="flow-step" style="border-color: var(--accent5);">
+        <div class="step-label">Conversation Mode</div>
+        <div class="step-detail">Chat with LLM, 20-turn history, temp=0.7, no tool calling</div>
+        <div class="step-file">conversation.py</div>
+      </div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step" style="border-color: var(--accent3);">
+      <div class="step-label">Command: App Detection + Auto-Focus</div>
+      <div class="step-detail">Longest n-gram match against app index. If detected: focus window (or launch via GNOME Search + wait up to 5s). Pre-fetch and inject keyboard shortcuts into prompt.</div>
+      <div class="step-file">app_index.py &mdash; retrieve_relevant_namespaces() | orchestrator.py</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step" style="border-color: var(--accent3);">
+      <div class="step-label">Short-Circuit Check (20+ patterns)</div>
+      <div class="step-detail">Common commands (focus, mute, screenshot, brightness, battery, etc.) execute directly without LLM. Response time &lt;100ms.</div>
+      <div class="step-file">orchestrator.py &mdash; run_agent() pattern matching</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step" style="border-color: var(--accent2);">
+      <div class="step-label">RAG Namespace Selection</div>
+      <div class="step-detail">Cosine similarity on SentenceTransformer embeddings (all-MiniLM-L6-v2). Top K=2 namespaces. Forced routing: window verbs &rarr; window ns, app name &rarr; input ns.</div>
+      <div class="step-file">app_index.py &mdash; retrieve_relevant_namespaces(), build_filtered_tool_schema()</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step" style="border-color: var(--accent);">
+      <div class="step-label">LLM Tool Calling - Gemma 4 E4B (Q4_K_M)</div>
+      <div class="step-detail">llama-server on localhost:8081, Vulkan GPU (Intel Arc), temp=0.0, max 5 chaining steps. Truncation detection with auto-retry at 600 tokens.</div>
+      <div class="step-file">orchestrator.py &mdash; call_llama_server() + tool chain loop</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step">
+      <div class="step-label">Tool Execution</div>
+      <div class="step-detail">Facade tools route to MCP server (gnome-desktop-mcp). Standalone tools call system commands directly. Results feed back to LLM for chaining.</div>
+      <div class="step-file">tools/facades.py, tools/standalone.py &mdash; MCP calls via mcp_client</div>
+    </div>
+
+    <div class="flow-arrow"></div>
+
+    <div class="flow-step" style="border-color: var(--accent4);">
+      <div class="step-label">TTS Response - Piper Neural Voice</div>
+      <div class="step-detail">Strip markdown, pad short text with fillers, synthesize WAV, play via aplay</div>
+      <div class="step-file">voice_io.py &mdash; speak()</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- MODULES -->
+<section id="modules">
+  <h2>Modules <span class="badge">8 files</span></h2>
+
+  <div class="module-grid">
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">orchestrator.py</span>
+        <span class="card-lines">1316 lines</span>
+      </div>
+      <div class="card-desc">Main entry point. Server lifecycle, MCP client, CLI args, run_agent() main loop with short-circuit patterns, tool chaining, and mode routing.</div>
+      <div class="card-exports">
+        <span>run_agent()</span>
+        <span>call_llama_server()</span>
+        <span>MCPClient</span>
+        <span>ensure_server_running()</span>
+        <span>check_automation_health()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">voice_io.py</span>
+        <span class="card-lines">225 lines</span>
+      </div>
+      <div class="card-desc">Full voice pipeline. Piper TTS, Faster-Whisper STT, Silero VAD. Models load at import time. Continuous listening with pre-speech buffering.</div>
+      <div class="card-exports">
+        <span>speak()</span>
+        <span>listen_and_transcribe()</span>
+        <span>strip_markdown()</span>
+        <span>is_speech()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">app_index.py</span>
+        <span class="card-lines">331 lines</span>
+      </div>
+      <div class="card-desc">Application indexing via Gio.AppInfo, smart window matching, RAG namespace retrieval with semantic embeddings. Init receives tool_schema_full.</div>
+      <div class="card-exports">
+        <span>build_app_index()</span>
+        <span>smart_match_window()</span>
+        <span>get_friendly_app_name()</span>
+        <span>get_installed_gui_apps()</span>
+        <span>retrieve_relevant_namespaces()</span>
+        <span>build_filtered_tool_schema()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">tools/facades.py</span>
+        <span class="card-lines">584 lines</span>
+      </div>
+      <div class="card-desc">6 facade tools consolidating 36+ operations. Wraps MCP calls with smart window matching, dialog detection, and vision fallback via Ollama.</div>
+      <div class="card-exports">
+        <span>window_control()</span>
+        <span>input_control()</span>
+        <span>audio_control()</span>
+        <span>system_settings()</span>
+        <span>vision_control()</span>
+        <span>workspace_control()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">tools/standalone.py</span>
+        <span class="card-lines">363 lines</span>
+      </div>
+      <div class="card-desc">14 standalone tools for system queries, power management, app install/uninstall, notifications, keyboard shortcuts, and cleanup.</div>
+      <div class="card-exports">
+        <span>get_battery_status()</span>
+        <span>set_brightness()</span>
+        <span>get/set_power_profile()</span>
+        <span>lock_screen()</span>
+        <span>power_action()</span>
+        <span>search_apps()</span>
+        <span>run_install()</span>
+        <span>run_uninstall()</span>
+        <span>get_app_shortcuts()</span>
+        <span>send_notification()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">conversation.py</span>
+        <span class="card-lines">94 lines</span>
+      </div>
+      <div class="card-desc">Intent classification (command vs conversation) and conversational chat handler with 20-turn history. Init receives call_llama_server fn.</div>
+      <div class="card-exports">
+        <span>classify_intent_type()</span>
+        <span>handle_conversation()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">dialog_handler.py</span>
+        <span class="card-lines">504 lines</span>
+      </div>
+      <div class="card-desc">Safe close operations via AT-SPI/dogtail. Detects save dialogs, reads button labels dynamically, activates by keyboard shortcut or Tab fallback.</div>
+      <div class="card-exports">
+        <span>DialogHandler</span>
+        <span>detect_save_dialog()</span>
+        <span>activate_button_by_keyboard()</span>
+        <span>verify_dialog_closed()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">utils.py</span>
+        <span class="card-lines">37 lines</span>
+      </div>
+      <div class="card-desc">Logging infrastructure. Rotating file handler (5MB, 3 backups), dual console/file output. Imported by every module.</div>
+      <div class="card-exports">
+        <span>log_and_print()</span>
+        <span>setup_logging()</span>
+        <span>DEBUG</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Config Files</h3>
+  <div class="module-grid">
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">config/tool_schemas.py</span>
+      </div>
+      <div class="card-desc">TOOL_SCHEMAS: 13 OpenAI-compatible function definitions with JSON schemas for parameters, descriptions, and examples.</div>
+    </div>
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">config/namespaces.py</span>
+      </div>
+      <div class="card-desc">NAMESPACES: 8 semantic groups (search, window, input, audio, settings, vision, workspace, system) with tool lists and descriptions for RAG.</div>
+    </div>
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">config/prompts.py</span>
+      </div>
+      <div class="card-desc">COMMAND_SYSTEM_MSG, CLASSIFIER_PROMPT (87 examples), CONVERSATION_PROMPT. Templates for LLM behavior in each mode.</div>
+    </div>
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">config/aliases.py</span>
+      </div>
+      <div class="card-desc">APP_SHORTCUT_ALIASES: 27 mappings from friendly names to JSON keys (e.g., "text editor" &rarr; "text-editor", "files" &rarr; "nautilus").</div>
+    </div>
+  </div>
+</section>
+
+<!-- DEPENDENCY GRAPH -->
+<section id="dep-graph">
+  <h2>Module Dependencies</h2>
+  <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem;">
+    <span style="color: var(--accent3);">&mdash;&mdash;</span> direct import &nbsp;&nbsp;
+    <span style="color: var(--accent2);">- - -</span> init() injection &nbsp;&nbsp;
+    No module imports from orchestrator.py (no circular deps).
+  </p>
+
+  <div class="dep-graph">
+    <svg viewBox="0 0 900 520" width="900" height="520" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/>
+        </marker>
+        <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#0ea5e9"/>
+        </marker>
+        <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#10b981"/>
+        </marker>
+      </defs>
+
+      <!-- orchestrator.py (center top) -->
+      <rect class="node-rect" x="320" y="20" width="260" height="44" fill="#16213e" stroke="#e94560" stroke-width="2"/>
+      <text x="450" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#e94560">orchestrator.py</text>
+
+      <!-- voice_io.py -->
+      <rect class="node-rect" x="40" y="130" width="160" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="120" y="155" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">voice_io.py</text>
+
+      <!-- app_index.py -->
+      <rect class="node-rect" x="240" y="130" width="160" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="320" y="155" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">app_index.py</text>
+
+      <!-- conversation.py -->
+      <rect class="node-rect" x="440" y="130" width="170" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="525" y="155" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">conversation.py</text>
+
+      <!-- dialog_handler.py -->
+      <rect class="node-rect" x="660" y="130" width="190" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="755" y="155" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">dialog_handler.py</text>
+
+      <!-- tools/facades.py -->
+      <rect class="node-rect" x="120" y="260" width="190" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="215" y="285" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">tools/facades.py</text>
+
+      <!-- tools/standalone.py -->
+      <rect class="node-rect" x="370" y="260" width="200" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="470" y="285" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">tools/standalone.py</text>
+
+      <!-- utils.py -->
+      <rect class="node-rect" x="250" y="380" width="140" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="320" y="405" text-anchor="middle" font-size="12" font-weight="600" fill="#0ea5e9">utils.py</text>
+
+      <!-- config/ -->
+      <rect class="node-rect" x="450" y="380" width="200" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="550" y="405" text-anchor="middle" font-size="12" font-weight="600" fill="#f59e0b">config/ (schemas, prompts, ...)</text>
+
+      <!-- shortcuts/ -->
+      <rect class="node-rect" x="130" y="380" width="80" height="40" fill="#16213e" stroke="#334155" stroke-width="1.5"/>
+      <text x="170" y="405" text-anchor="middle" font-size="12" font-weight="600" fill="#f59e0b">shortcuts/</text>
+
+      <!-- gnome-desktop-mcp -->
+      <rect class="node-rect" x="80" y="470" width="220" height="36" fill="#0f3460" stroke="#8b5cf6" stroke-width="1.5"/>
+      <text x="190" y="493" text-anchor="middle" font-size="11" font-weight="600" fill="#8b5cf6">gnome-desktop-mcp (MCP server)</text>
+
+      <!-- llama-server -->
+      <rect class="node-rect" x="360" y="470" width="200" height="36" fill="#0f3460" stroke="#8b5cf6" stroke-width="1.5"/>
+      <text x="460" y="493" text-anchor="middle" font-size="11" font-weight="600" fill="#8b5cf6">llama-server (Gemma 4)</text>
+
+      <!-- Ollama -->
+      <rect class="node-rect" x="620" y="470" width="160" height="36" fill="#0f3460" stroke="#8b5cf6" stroke-width="1.5"/>
+      <text x="700" y="493" text-anchor="middle" font-size="11" font-weight="600" fill="#8b5cf6">Ollama (vision)</text>
+
+      <!-- Edges: orchestrator imports (green solid) -->
+      <path class="edge edge-import" d="M380 64 L140 130" marker-end="url(#arrowhead-green)"/>
+      <path class="edge edge-import" d="M430 64 L330 130" marker-end="url(#arrowhead-green)"/>
+      <path class="edge edge-import" d="M500 64 L525 130" marker-end="url(#arrowhead-green)"/>
+      <path class="edge edge-import" d="M560 64 L740 130" marker-end="url(#arrowhead-green)"/>
+
+      <!-- Edges: orchestrator init() calls (blue dashed) -->
+      <path class="edge edge-init" d="M370 64 L230 260" marker-end="url(#arrowhead-blue)"/>
+      <path class="edge edge-init" d="M480 64 L460 260" marker-end="url(#arrowhead-blue)"/>
+      <path class="edge edge-init" d="M420 64 L320 130" stroke-dasharray="6 3" marker-end="url(#arrowhead-blue)"/>
+      <path class="edge edge-init" d="M500 64 L525 130" stroke-dasharray="6 3" marker-end="url(#arrowhead-blue)"/>
+
+      <!-- facades imports voice_io -->
+      <path class="edge edge-import" d="M170 260 L130 170" marker-end="url(#arrowhead-green)"/>
+
+      <!-- facades → utils -->
+      <path class="edge edge-import" d="M215 300 L310 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- standalone → utils -->
+      <path class="edge edge-import" d="M440 300 L340 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- standalone → shortcuts -->
+      <path class="edge edge-import" d="M370 290 L210 390" marker-end="url(#arrowhead-green)"/>
+
+      <!-- standalone → config/aliases -->
+      <path class="edge edge-import" d="M500 300 L530 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- voice_io → utils -->
+      <path class="edge edge-import" d="M120 170 L290 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- app_index → utils -->
+      <path class="edge edge-import" d="M320 170 L320 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- app_index → config -->
+      <path class="edge edge-import" d="M370 170 L500 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- conversation → utils -->
+      <path class="edge edge-import" d="M500 170 L340 380" marker-end="url(#arrowhead-green)"/>
+
+      <!-- facades → MCP -->
+      <path class="edge" d="M190 300 L190 470" stroke="#8b5cf6" marker-end="url(#arrowhead)"/>
+
+      <!-- standalone → MCP -->
+      <path class="edge" d="M400 300 L220 470" stroke="#8b5cf6" stroke-dasharray="4 4" marker-end="url(#arrowhead)"/>
+
+      <!-- orchestrator → llama-server -->
+      <path class="edge" d="M450 64 L460 470" stroke="#8b5cf6" marker-end="url(#arrowhead)"/>
+
+      <!-- facades → Ollama -->
+      <path class="edge" d="M310 280 L680 470" stroke="#8b5cf6" stroke-dasharray="4 4" marker-end="url(#arrowhead)"/>
+
+    </svg>
+  </div>
+</section>
+
+<!-- TOOLS -->
+<section id="tools">
+  <h2>Tool Organization <span class="badge">13 schemas</span></h2>
+
+  <h3>Facade Tools (6) &mdash; consolidate 36+ MCP operations</h3>
+  <table class="tool-table">
+    <tr>
+      <th>Tool</th>
+      <th>Operations</th>
+      <th>Backend</th>
+    </tr>
+    <tr>
+      <td><code>window_control</code></td>
+      <td class="ops">list, focus, close, minimize, maximize, restore, screenshot, screenshot_area, move_resize</td>
+      <td>MCP + DialogHandler</td>
+    </tr>
+    <tr>
+      <td><code>input_control</code></td>
+      <td class="ops">type, key_combo, key_press, click, double_click, drag, scroll</td>
+      <td>MCP + dialog check on close keys</td>
+    </tr>
+    <tr>
+      <td><code>audio_control</code></td>
+      <td class="ops">volume, mute, unmute, play, pause, play_pause, next, previous, stop</td>
+      <td>MCP (set_volume, media_control)</td>
+    </tr>
+    <tr>
+      <td><code>system_settings</code></td>
+      <td class="ops">dark_mode, night_light, do_not_disturb, wifi, bluetooth, wallpaper</td>
+      <td>MCP (quick_settings, set_wallpaper)</td>
+    </tr>
+    <tr>
+      <td><code>vision_control</code></td>
+      <td class="ops">describe, describe_file, pick_color, get_monitors</td>
+      <td>MCP + Ollama (vision fallback)</td>
+    </tr>
+    <tr>
+      <td><code>workspace_control</code></td>
+      <td class="ops">list, activate</td>
+      <td>MCP (list_workspaces, activate_workspace)</td>
+    </tr>
+  </table>
+
+  <h3>Standalone Tools (14) &mdash; direct system calls</h3>
+  <table class="tool-table">
+    <tr>
+      <th>Tool</th>
+      <th>Implementation</th>
+    </tr>
+    <tr><td><code>get_battery_status()</code></td><td>upower -i battery_BAT0</td></tr>
+    <tr><td><code>set_brightness(target, level)</code></td><td>brightnessctl (screen/keyboard)</td></tr>
+    <tr><td><code>get_power_profile()</code></td><td>D-Bus net.hadess.PowerProfiles</td></tr>
+    <tr><td><code>set_power_profile(profile)</code></td><td>D-Bus net.hadess.PowerProfiles</td></tr>
+    <tr><td><code>lock_screen()</code></td><td>loginctl lock-session</td></tr>
+    <tr><td><code>power_action(action)</code></td><td>systemctl (suspend/reboot/poweroff) + gnome-session-quit</td></tr>
+    <tr><td><code>get_datetime()</code></td><td>locale-aware strftime</td></tr>
+    <tr><td><code>list_installed_applications()</code></td><td>Gio.AppInfo enumeration + categorization</td></tr>
+    <tr><td><code>send_notification(summary, body)</code></td><td>MCP send_notification</td></tr>
+    <tr><td><code>cleanup_screenshots()</code></td><td>MCP cleanup_screenshots</td></tr>
+    <tr><td><code>search_apps(query)</code></td><td>flatpak search + dnf search</td></tr>
+    <tr><td><code>run_install(app_id, source)</code></td><td>flatpak install / sudo dnf install</td></tr>
+    <tr><td><code>run_uninstall(app_id, source)</code></td><td>flatpak uninstall / sudo dnf remove</td></tr>
+    <tr><td><code>get_app_shortcuts(app_name)</code></td><td>Curated JSON + gsettings lookup</td></tr>
+  </table>
+
+  <h3>Direct MCP Tools (5) &mdash; forwarded without wrappers</h3>
+  <table class="tool-table">
+    <tr>
+      <th>Tool</th>
+      <th>Purpose</th>
+    </tr>
+    <tr><td><code>gnome_search</code></td><td>GNOME Activities launcher (with website/file routing)</td></tr>
+    <tr><td><code>search_files</code></td><td>File search via localsearch index</td></tr>
+    <tr><td><code>ping</code></td><td>Health check</td></tr>
+    <tr><td><code>get_enabled</code></td><td>Check automation extension status</td></tr>
+    <tr><td><code>set_enabled</code></td><td>Enable/disable automation extension</td></tr>
+  </table>
+</section>
+
+<!-- EXTERNAL SYSTEMS -->
+<section id="external">
+  <h2>External Systems</h2>
+
+  <div class="ext-grid">
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--accent);"></span>llama-server</h4>
+      <ul>
+        <li>Gemma 4 E4B (Q4_K_M, 8B params)</li>
+        <li>OpenAI-compatible API on :8081</li>
+        <li>Vulkan GPU (Intel Arc), 99 layers</li>
+        <li>4096 token context, ~6-7 tok/s</li>
+      </ul>
+    </div>
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--accent5);"></span>gnome-desktop-mcp</h4>
+      <ul>
+        <li>MCP server over stdio</li>
+        <li>Window, input, settings, media</li>
+        <li>Screenshots, search, notifications</li>
+        <li>Runs as GNOME Shell extension</li>
+      </ul>
+    </div>
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--accent3);"></span>Voice Models</h4>
+      <ul>
+        <li>Piper TTS (en_US-lessac-medium ONNX)</li>
+        <li>Faster-Whisper (medium.en, int8 CPU)</li>
+        <li>Silero VAD (PyTorch)</li>
+        <li>All loaded at startup</li>
+      </ul>
+    </div>
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--accent4);"></span>Ollama (vision only)</h4>
+      <ul>
+        <li>Gemma 4:e4b model</li>
+        <li>Fallback for describe/describe_file</li>
+        <li>llama-server lacks vision support</li>
+        <li>Used only by vision_control()</li>
+      </ul>
+    </div>
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--accent2);"></span>GNOME Desktop</h4>
+      <ul>
+        <li>Mutter window manager (D-Bus)</li>
+        <li>gsettings (dark mode, a11y)</li>
+        <li>AT-SPI2 (dialog detection)</li>
+        <li>Gio.AppInfo (app indexing)</li>
+      </ul>
+    </div>
+    <div class="ext-card">
+      <h4><span class="dot" style="background: var(--text-dim);"></span>System Tools</h4>
+      <ul>
+        <li>upower (battery)</li>
+        <li>brightnessctl (brightness)</li>
+        <li>systemctl/loginctl (power/lock)</li>
+        <li>flatpak + dnf (app management)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- INIT SEQUENCE -->
+<section id="init">
+  <h2>Init Sequence</h2>
+  <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem;">
+    Modules use the init-setter pattern: runtime dependencies (mcp_client, dialog_handler) are injected via init() calls at startup. No extracted module imports from orchestrator.py.
+  </p>
+
+  <div class="init-seq">
+    <div class="step">
+      <span class="step-num">1</span>
+      <span class="step-code"><span class="mod">utils</span>.<span class="fn">setup_logging</span>(<span class="arg">args.log_dir</span>) <span class="comment"># rotating file + console</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span>
+      <span class="step-code"><span class="comment"># voice_io models load at import time (Piper, Whisper, Silero VAD)</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span>
+      <span class="step-code"><span class="comment"># app_index embedding model loads at import time (SentenceTransformer)</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">4</span>
+      <span class="step-code"><span class="mod">app_index</span>.<span class="fn">init</span>(<span class="arg">tool_schema_full</span>) <span class="comment"># inject tool schema for RAG filtering</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">5</span>
+      <span class="step-code"><span class="fn">ensure_server_running</span>(<span class="arg">force_restart</span>) <span class="comment"># start llama-server if not running</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">6</span>
+      <span class="step-code"><span class="mod">facades</span>.<span class="fn">init</span>(<span class="arg">mcp_client, dialog_handler, smart_match_window, get_friendly_app_name</span>)</span>
+    </div>
+    <div class="step">
+      <span class="step-num">7</span>
+      <span class="step-code"><span class="mod">standalone</span>.<span class="fn">init</span>(<span class="arg">mcp_client, get_installed_gui_apps</span>)</span>
+    </div>
+    <div class="step">
+      <span class="step-num">8</span>
+      <span class="step-code"><span class="mod">conversation</span>.<span class="fn">init</span>(<span class="arg">call_llama_server, debug=DEBUG</span>)</span>
+    </div>
+    <div class="step">
+      <span class="step-num">9</span>
+      <span class="step-code"><span class="mod">mcp_client</span>.<span class="fn">start</span>() <span class="comment"># connect to gnome-desktop-mcp</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">10</span>
+      <span class="step-code"><span class="fn">build_app_index</span>() <span class="comment"># Gio.AppInfo enumeration</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">11</span>
+      <span class="step-code"><span class="fn">check_automation_health</span>(<span class="arg">auto_enable=True</span>) <span class="comment"># verify + enable extension</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- PERFORMANCE -->
+<section id="performance">
+  <h2>Performance</h2>
+
+  <h3>Inference Speed (Gemma 4 E4B Q4_K_M on Intel Arc Vulkan)</h3>
+  <div class="perf-bar">
+    <span class="label">Generation speed</span>
+    <div class="bar">
+      <div class="bar-fill" style="width: 70%; background: var(--accent2);"></div>
+      <span class="bar-value">~6-7 tok/s</span>
+    </div>
+  </div>
+  <div class="perf-bar">
+    <span class="label">Whisper transcription</span>
+    <div class="bar">
+      <div class="bar-fill" style="width: 20%; background: var(--accent3);"></div>
+      <span class="bar-value">~0.2s</span>
+    </div>
+  </div>
+  <div class="perf-bar">
+    <span class="label">RAG retrieval</span>
+    <div class="bar">
+      <div class="bar-fill" style="width: 8%; background: var(--accent4);"></div>
+      <span class="bar-value">~0.03-0.09s</span>
+    </div>
+  </div>
+  <div class="perf-bar">
+    <span class="label">Short-circuit commands</span>
+    <div class="bar">
+      <div class="bar-fill" style="width: 5%; background: var(--accent);"></div>
+      <span class="bar-value">&lt;0.1s</span>
+    </div>
+  </div>
+  <div class="perf-bar">
+    <span class="label">Typical LLM tool call</span>
+    <div class="bar">
+      <div class="bar-fill" style="width: 85%; background: var(--accent5);"></div>
+      <span class="bar-value">15-25s</span>
+    </div>
+  </div>
+
+  <h3>Short-Circuit Patterns (skip LLM entirely)</h3>
+  <div class="sc-grid">
+    <div class="sc-item"><span class="sc-cmd">focus/switch/open app</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">close window</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">minimize/maximize</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">take a screenshot</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">tile left/right/corner</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">mute/unmute</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">volume up/down/N%</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">play/pause/next/prev</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">what time is it</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">battery status</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">dark mode on/off</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">wifi/bluetooth toggle</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">brightness up/down</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">power saver/balanced</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">lock screen</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">suspend/restart/shutdown</span><span class="sc-skip">confirmed</span></div>
+    <div class="sc-item"><span class="sc-cmd">install/uninstall app</span><span class="sc-skip">confirmed</span></div>
+    <div class="sc-item"><span class="sc-cmd">list applications</span><span class="sc-skip">direct</span></div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section id="safety">
+  <h2>Safety Mechanisms</h2>
+
+  <div class="safety-grid">
+    <div class="safety-item">
+      <div class="safety-icon">&#x1f6e1;</div>
+      <div>
+        <strong>Dialog detection</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">AT-SPI/dogtail detects save dialogs on close. Reads button labels dynamically, prompts user by voice, activates choice by keyboard.</span>
+      </div>
+    </div>
+    <div class="safety-item">
+      <div class="safety-icon">&#x1f50c;</div>
+      <div>
+        <strong>Automation health checks</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">Auto-enables GNOME extension if disabled. Auto-recovers on "disabled" or "not responding" errors during tool execution.</span>
+      </div>
+    </div>
+    <div class="safety-item">
+      <div class="safety-icon">&#x26a0;</div>
+      <div>
+        <strong>Power action confirmation</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">Suspend, restart, shutdown, and logout require explicit voice confirmation before execution.</span>
+      </div>
+    </div>
+    <div class="safety-item">
+      <div class="safety-icon">&#x1f4e6;</div>
+      <div>
+        <strong>Install confirmation</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">App install/uninstall searches first, presents options, waits for user selection and confirmation.</span>
+      </div>
+    </div>
+    <div class="safety-item">
+      <div class="safety-icon">&#x1f504;</div>
+      <div>
+        <strong>Tool chain limit</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">Max 5 chaining steps per command prevents infinite LLM loops. Speaks last result if limit reached.</span>
+      </div>
+    </div>
+    <div class="safety-item">
+      <div class="safety-icon">&#x1f6a8;</div>
+      <div>
+        <strong>Error recovery</strong><br>
+        <span style="color: var(--text-dim); font-size: 0.8rem;">try/except/finally around command processing. LLM errors, MCP failures, and tool exceptions don't crash the orchestrator.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Anthony &mdash; Voice-Driven Desktop Orchestrator &mdash; Architecture Overview
+</footer>
+
+</body>
+</html>
