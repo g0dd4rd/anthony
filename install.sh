@@ -205,26 +205,13 @@ print_header "Step 5: Downloading Piper Voice Model"
 
 PIPER_MODEL_DIR="$HOME/anthony"
 PIPER_MODEL_FILE="$PIPER_MODEL_DIR/en_US-lessac-medium.onnx"
-PIPER_CONFIG_FILE="$PIPER_MODEL_DIR/en_US-lessac-medium.onnx.json"
-
-mkdir -p "$PIPER_MODEL_DIR"
 
 if [ ! -f "$PIPER_MODEL_FILE" ]; then
     print_step "Downloading Piper voice model..."
-    wget -q --show-progress -O "$PIPER_MODEL_FILE" \
-        "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+    python3 -m piper.download_voices --download-dir "$PIPER_MODEL_DIR" en_US-lessac-medium
     print_success "Piper model downloaded"
 else
     print_success "Piper model already exists"
-fi
-
-if [ ! -f "$PIPER_CONFIG_FILE" ]; then
-    print_step "Downloading Piper model config..."
-    wget -q --show-progress -O "$PIPER_CONFIG_FILE" \
-        "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
-    print_success "Piper config downloaded"
-else
-    print_success "Piper config already exists"
 fi
 
 # ========================================
@@ -284,7 +271,7 @@ fi
 
 echo ""
 print_step "Checking Piper voice model..."
-if [ -f "$PIPER_MODEL_FILE" ] && [ -f "$PIPER_CONFIG_FILE" ]; then
+if [ -f "$PIPER_MODEL_FILE" ]; then
     print_success "Piper voice model exists"
 else
     print_error "Piper voice model missing"
@@ -310,7 +297,7 @@ if [ $VERIFICATION_FAILED -eq 0 ]; then
     echo ""
     echo "You can now run the orchestrator:"
     echo -e "  ${GREEN}cd ~/anthony${NC}"
-    echo -e "  ${GREEN}./voice-driven-orchestrator-mcp-conversational.py${NC}"
+    echo -e "  ${GREEN}./orchestrator.py${NC}"
     echo ""
     echo "First run will download additional models:"
     echo "  - Whisper medium.en (~1.5GB)"

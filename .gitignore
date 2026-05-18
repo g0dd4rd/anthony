@@ -31,3 +31,4 @@ temp*.wav
 
 # Model files
 vosk-models/
+*.onnx
