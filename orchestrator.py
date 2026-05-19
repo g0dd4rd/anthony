@@ -279,7 +279,7 @@ def call_llama_server(messages, tools=None, temperature=0.0, max_tokens=200):
 # MCP Client Setup
 # ----------------------------------------
 class MCPClient:
-    """Manages connection to gnome-desktop-mcp server"""
+    """Manages connection to anthony-mcp server"""
 
     def __init__(self):
         self.session = None
@@ -305,7 +305,7 @@ class MCPClient:
     async def _connect_and_process(self):
         """Connect to MCP server and process commands"""
         server_params = StdioServerParameters(
-            command="gnome-desktop-mcp",
+            command="anthony-mcp",
             args=[],
             env=os.environ.copy()
         )
@@ -314,7 +314,7 @@ class MCPClient:
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 self.session = session
-                log_and_print("[SYSTEM] MCP connected to gnome-desktop-mcp")
+                log_and_print("[SYSTEM] MCP connected to anthony-mcp")
 
                 while True:
                     if not self.command_queue.empty():

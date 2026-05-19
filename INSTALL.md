@@ -12,7 +12,7 @@ cd ~/anthony
 The script will:
 1. ✅ Install system packages (ALSA, PortAudio, Python dev headers)
 2. ✅ Install Python packages (Ollama, PyAudio, Whisper, Piper, MCP, etc.)
-3. ✅ Install GNOME Desktop MCP server
+3. ✅ Install Anthony MCP server
 4. ✅ Install Ollama and download Gemma4 model
 5. ✅ Download Piper voice model
 6. ✅ Enable GNOME accessibility
@@ -37,8 +37,8 @@ The script will:
 - `numpy` - Numerical operations
 - `dogtail` - GNOME accessibility/dialog handling
 
-### Node.js Packages (via npm)
-- `gnome-desktop-mcp` - GNOME desktop automation server
+### Anthony MCP
+- `anthony-mcp` - GNOME desktop automation server (installed from source)
 
 ### Models
 - **Gemma4:e4b** - Vision + reasoning LLM (~9.6GB)
@@ -60,9 +60,10 @@ sudo dnf install -y alsa-utils portaudio-devel python3-devel nodejs npm
 pip install ollama sounddevice pyaudio faster-whisper piper-tts mcp torch numpy dogtail
 ```
 
-### 3. GNOME Desktop MCP
+### 3. Anthony MCP
 ```bash
-npm install -g gnome-desktop-mcp
+git clone https://github.com/g0dd4rd/anthony-mcp.git ~/anthony-mcp
+cd ~/anthony-mcp && ./install.sh
 ```
 
 ### 4. Ollama + Gemma4
@@ -89,7 +90,7 @@ Run verification checks manually:
 
 ```bash
 # Check commands
-which python3 pip node npm ollama gnome-desktop-mcp aplay
+which python3 pip node npm ollama anthony-mcp aplay
 
 # Check Python modules
 python3 -c "import ollama, sounddevice, pyaudio, faster_whisper, piper, mcp, torch, dogtail"
@@ -110,14 +111,14 @@ After installation, run:
 
 ```bash
 cd ~/anthony
-./voice-driven-orchestrator-mcp-conversational.py
+./orchestrator.py
 ```
 
 **First run will:**
 - Download Whisper model (~1.5GB) - takes 2-5 minutes
 - Download Silero VAD (~2MB) - takes a few seconds
 - Verify accessibility is enabled
-- Connect to GNOME Desktop MCP
+- Connect to Anthony MCP
 
 ## Troubleshooting
 
@@ -135,8 +136,8 @@ ollama pull gemma4:e4b
 
 ### MCP server not found
 ```bash
-npm install -g gnome-desktop-mcp
-which gnome-desktop-mcp  # Should return a path
+cd ~/anthony-mcp && pip install -e mcp-server
+which anthony-mcp  # Should return a path
 ```
 
 ### Accessibility not working
@@ -170,7 +171,7 @@ To remove everything:
 pip uninstall ollama sounddevice pyaudio faster-whisper piper-tts mcp torch numpy dogtail
 
 # MCP server
-npm uninstall -g gnome-desktop-mcp
+pip uninstall anthony-mcp
 
 # Ollama (optional - removes all models)
 sudo rm -rf /usr/local/bin/ollama ~/.ollama

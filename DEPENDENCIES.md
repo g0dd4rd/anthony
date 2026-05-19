@@ -29,8 +29,8 @@
 | Component | Purpose |
 |---|---|
 | gnome-shell | Desktop environment |
-| gnome-desktop-mcp extension | D-Bus bridge for window/input/settings control |
-| gnome-desktop-mcp MCP server | Python MCP server wrapping the D-Bus interface |
+| anthony-mcp extension | D-Bus bridge for window/input/settings control |
+| anthony-mcp MCP server | Python MCP server wrapping the D-Bus interface |
 
 ## AI models
 | Model | Purpose | Location |

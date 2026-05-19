@@ -72,7 +72,7 @@ ollama pull gemma4:e4b
 ### 3. Verify MCP Connection
 
 ```bash
-# Test gnome-desktop-mcp extension
+# Test anthony-mcp extension
 cd ~/anthony
 ./test_gnome_mcp.py
 ```
@@ -196,14 +196,14 @@ sudo dnf install intel-opencl intel-level-zero
 ### MCP tools fail
 ```bash
 # Verify extension is running
-gnome-extensions info desktop-automation@gnomemcp.github.io
+gnome-extensions info desktop-automation@anthonymcp.github.io
 
 # Should show: State: ACTIVE
 
 # Test D-Bus connection
 gdbus call --session --dest org.gnome.Shell \
-  --object-path /io/github/gnomemcp/DesktopAutomation \
-  --method io.github.gnomemcp.DesktopAutomation.Ping
+  --object-path /io/github/anthonymcp/DesktopAutomation \
+  --method io.github.anthonymcp.DesktopAutomation.Ping
 
 # Should return: (true,)
 ```

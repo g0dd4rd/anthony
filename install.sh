@@ -151,29 +151,29 @@ print_success "All Python packages installed"
 # ========================================
 # 3. GNOME Desktop MCP Server
 # ========================================
-print_header "Step 3: Installing GNOME Desktop MCP"
+print_header "Step 3: Installing Anthony MCP Server"
 
-if ! command -v gnome-desktop-mcp &> /dev/null; then
-    print_step "Installing gnome-desktop-mcp..."
+if ! command -v anthony-mcp &> /dev/null; then
+    print_step "Installing anthony-mcp..."
 
     # Check if local development version exists
-    if [ -d "$HOME/gnome-desktop-mcp" ]; then
-        print_step "Found local gnome-desktop-mcp, installing from source..."
-        cd "$HOME/gnome-desktop-mcp"
+    if [ -d "$HOME/anthony-mcp" ]; then
+        print_step "Found local anthony-mcp, installing from source..."
+        cd "$HOME/anthony-mcp"
         ./install.sh
-        print_success "gnome-desktop-mcp installed from local source"
+        print_success "anthony-mcp installed from local source"
     else
-        print_step "Cloning gnome-desktop-mcp from GitHub..."
+        print_step "Cloning anthony-mcp from GitHub..."
         cd "$HOME"
-        git clone https://github.com/sbuysse/gnome-mcp.git gnome-desktop-mcp
-        cd gnome-desktop-mcp
+        git clone https://github.com/g0dd4rd/anthony-mcp.git
+        cd anthony-mcp
         ./install.sh
-        print_success "gnome-desktop-mcp installed from GitHub"
+        print_success "anthony-mcp installed from GitHub"
     fi
 
     cd "$HOME/anthony"
 else
-    print_success "gnome-desktop-mcp already installed"
+    print_success "anthony-mcp already installed"
 fi
 
 # ========================================
@@ -242,7 +242,7 @@ check_command "python3" || VERIFICATION_FAILED=1
 check_command "pip" || VERIFICATION_FAILED=1
 check_command "git" || VERIFICATION_FAILED=1
 check_command "ollama" || VERIFICATION_FAILED=1
-check_command "gnome-desktop-mcp" || VERIFICATION_FAILED=1
+check_command "anthony-mcp" || VERIFICATION_FAILED=1
 check_command "aplay" || VERIFICATION_FAILED=1
 check_command "pactl" || VERIFICATION_FAILED=1
 check_command "playerctl" || VERIFICATION_FAILED=1

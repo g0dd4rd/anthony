@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple MCP client for testing gnome-desktop-mcp tools
+Simple MCP client for testing anthony-mcp tools
 """
 
 import os
@@ -14,13 +14,13 @@ from mcp.client.stdio import stdio_client
 
 
 class MCPClient:
-    """Manages connection to gnome-desktop-mcp server"""
+    """Manages connection to anthony-mcp server"""
 
-    def __init__(self, server_command="gnome-desktop-mcp"):
+    def __init__(self, server_command="anthony-mcp"):
         """Initialize MCP client.
 
         Args:
-            server_command: Command to start the MCP server (default: gnome-desktop-mcp)
+            server_command: Command to start the MCP server (default: anthony-mcp)
         """
         self.server_command = server_command
         self.session = None
