@@ -65,9 +65,16 @@ def speak(text: str):
 
     temp_audio_path = "/tmp/agent_response.wav"
     try:
+        synth_start = time.time()
         with wave.open(temp_audio_path, "wb") as wav_file:
             voice_model.synthesize_wav(clean_text, wav_file)
+        synth_elapsed = time.time() - synth_start
+
+        play_start = time.time()
         subprocess.run(["aplay", "-q", temp_audio_path], check=True)
+        play_elapsed = time.time() - play_start
+
+        log_and_print(f"[TIMING] TTS synthesis: {synth_elapsed:.2f}s, playback: {play_elapsed:.2f}s")
     except Exception as e:
         log_and_print(f"[SYSTEM] Voice error: {e}", level='error')
 
