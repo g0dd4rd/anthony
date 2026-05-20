@@ -4,24 +4,25 @@
 | Package | Purpose |
 |---|---|
 | faster-whisper | Speech-to-text (Whisper model) |
-| piper-tts | Text-to-speech |
+| piper-tts | Text-to-speech (Piper neural voice) |
 | sentence-transformers | Semantic embedding for tool routing |
-| torch | ML backend for sentence-transformers |
+| torch | ML backend for Silero VAD + sentence-transformers |
 | numpy | Array operations |
 | pyaudio | Microphone input |
-| sounddevice | Audio device enumeration |
+| sounddevice | Audio device enumeration / ALSA warning suppression |
 | requests | HTTP calls to llama-server |
-| ollama | Vision model (fallback) |
 | webcolors | Color name lookup for pick_color |
 | mcp | MCP client (Model Context Protocol) |
+| dogtail | GNOME accessibility / dialog detection via AT-SPI |
 
 ## System packages (Fedora/RHEL)
 | Package | Purpose |
 |---|---|
-| alsa-utils | `aplay` for audio playback |
+| alsa-utils | `aplay` for TTS audio playback |
+| portaudio-devel | Build dependency for PyAudio |
+| pipewire-utils | `pactl` for volume control |
+| playerctl | MPRIS media player control |
 | xdg-utils | `xdg-open` for opening URLs/files |
-| upower | Battery status queries |
-| brightnessctl | Screen and keyboard backlight control |
 | localsearch | GNOME file indexing (Tracker) |
 | procps-ng | `pgrep` / `kill` for process management |
 
@@ -29,14 +30,14 @@
 | Component | Purpose |
 |---|---|
 | gnome-shell | Desktop environment |
-| anthony-mcp extension | D-Bus bridge for window/input/settings control |
+| anthony-mcp extension | D-Bus bridge for window/input/settings/system control |
 | anthony-mcp MCP server | Python MCP server wrapping the D-Bus interface |
 
 ## AI models
 | Model | Purpose | Location |
 |---|---|---|
-| gemma-4-e4b (or similar) | Tool-calling LLM | llama-server (port 8081) |
-| faster-whisper medium.en | Speech-to-text | Downloaded on first run |
-| piper en_US-lessac-medium | Text-to-speech | Local .onnx file |
-| all-MiniLM-L6-v2 | Sentence embeddings for routing | Downloaded on first run |
-| minicpm-v (via ollama) | Vision model for screen description | Ollama |
+| Gemma 4 E4B (Q4_K_M) | Tool-calling + vision LLM | llama-server on port 8081 (Vulkan GPU) |
+| faster-whisper medium.en | Speech-to-text | Auto-downloads on first run (~1.5GB) |
+| Piper en_US-lessac-medium | Text-to-speech | Local .onnx file (~60MB) |
+| all-MiniLM-L6-v2 | Sentence embeddings for RAG routing | Auto-downloads on first run (~80MB) |
+| Silero VAD | Voice activity detection | Auto-downloads on first run (~2MB) |
