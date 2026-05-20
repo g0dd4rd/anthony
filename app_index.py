@@ -275,6 +275,12 @@ def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> tuple:
         if 'window' not in forced_namespaces:
             forced_namespaces.append('window')
 
+    system_phrases = ['clean up', 'cleanup', 'notification', 'notify me',
+                      'remind me', 'what apps', 'installed app', 'list app']
+    if any(phrase in user_input_lower for phrase in system_phrases):
+        if 'system' not in forced_namespaces:
+            forced_namespaces.append('system')
+
     words = [w.strip(string.punctuation) for w in user_input_lower.split()]
     words = [w for w in words if w]
     detected_app = None
