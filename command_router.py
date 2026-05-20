@@ -51,23 +51,8 @@ def prepare_command_context(user_input, command_messages, retrieval_start_time):
         try:
             focus_result = window_control("focus", detected_app)
             if "No window found" in focus_result:
-                log_and_print(f"[ROUTING] App '{detected_app}' not running, launching it")
-                try:
-                    launch_result = _mcp_client.call_tool("gnome_search", {"query": detected_app})
-                    log_and_print(f"[ROUTING] Launched: {launch_result}")
-                    for _attempt in range(10):
-                        time.sleep(0.5)
-                        focus_result = window_control("focus", detected_app)
-                        if "No window found" not in focus_result:
-                            break
-                    if "No window found" not in focus_result:
-                        auto_focused = True
-                        log_and_print(f"[ROUTING] Auto-focused after launch ({(_attempt + 1) * 0.5:.1f}s): {focus_result}")
-                        command_messages[-1]["content"] += f"\n[{detected_app} has been opened and is focused. Do NOT open or search for it.]"
-                    else:
-                        log_and_print(f"[ROUTING] App '{detected_app}' didn't appear within 5s", level='warning')
-                except Exception as e:
-                    log_and_print(f"[ROUTING] Failed to launch '{detected_app}': {e}")
+                log_and_print(f"[ROUTING] App '{detected_app}' detected but not running, skipping auto-focus")
+                command_messages[-1]["content"] += f"\n[{detected_app} is not currently running.]"
             else:
                 auto_focused = True
                 log_and_print(f"[ROUTING] Auto-focused: {focus_result}")
@@ -187,6 +172,32 @@ def try_short_circuit(user_input, user_input_lower, detected_app, auto_focused,
                 _log_shortcircuit(f"{setting_phrase} {state}", retrieval_start_time)
                 return True
             break
+
+    # --- App shortcuts query ---
+    if 'shortcut' in user_input_lower:
+        shortcut_app = detected_app
+        if not shortcut_app:
+            from app_index import app_name_map
+            words = user_input_lower.split()
+            for n in range(len(words), 0, -1):
+                for i in range(len(words) - n + 1):
+                    phrase = ' '.join(words[i:i+n])
+                    if phrase in app_name_map:
+                        shortcut_app = phrase
+                        break
+                if shortcut_app:
+                    break
+        if shortcut_app:
+            shortcut_info = get_app_shortcuts(shortcut_app)
+            if not shortcut_info.startswith("No shortcuts"):
+                shortcuts_only = shortcut_info.split("\nSkills (")[0]
+                lines = shortcuts_only.splitlines()
+                shortcuts = [l.lstrip('- ').strip() for l in lines
+                             if l.startswith('- ')]
+                tts_text = f"Shortcuts for {shortcut_app}: " + ", ".join(shortcuts)
+                _speak(tts_text)
+                _log_shortcircuit(f"shortcuts for {shortcut_app}", retrieval_start_time)
+                return True
 
     # --- Window management (close/minimize/maximize/restore + app name) ---
     if detected_app:

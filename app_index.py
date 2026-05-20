@@ -130,8 +130,9 @@ def build_app_index():
             if keyword:
                 app_name_map[keyword.lower()] = exec_name
 
-    for alias in APP_SHORTCUT_ALIASES:
+    for alias, target in APP_SHORTCUT_ALIASES.items():
         app_names_only.add(alias)
+        app_name_map[alias] = target
 
     log_and_print(f"[SYSTEM] Indexed {len(app_name_map)} app name mappings ({gnome_count} org.gnome with priority)")
 
