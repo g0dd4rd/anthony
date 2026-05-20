@@ -489,6 +489,41 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
             )
             return description
 
+        elif action == "describe_window":
+            result = _mcp_client.call_tool("list_windows", {})
+            if result.startswith("Error"):
+                return result
+            windows = json.loads(result)
+            focused = next((w for w in windows if w.get('focused', False)), None)
+            if not focused:
+                return "No focused window found."
+            window_id = focused['id']
+            friendly_name = _get_friendly_app_name(focused.get('wmClass', ''))
+
+            result = _mcp_client.call_tool("screenshot_window", {
+                "window_id": window_id, "include_frame": False,
+                "include_cursor": False, "format": "path"
+            })
+            if result.startswith("Error"):
+                return result
+
+            screenshot_path = result.strip()
+            with open(screenshot_path, 'rb') as img_file:
+                import base64
+                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+
+            description = _call_vision(
+                'Describe what you see in this application window in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly.',
+                f'Describe the content shown in this {friendly_name} window.',
+                img_data
+            )
+
+            try:
+                os.remove(screenshot_path)
+            except:
+                pass
+            return description
+
         elif action == "pick_color":
             log_and_print(f"[DEBUG] vision_control received coordinates: x={x}, y={y}, types: x={type(x)}, y={type(y)}", level='debug', console=DEBUG)
             result = _mcp_client.call_tool("pick_color", {"x": x, "y": y})
