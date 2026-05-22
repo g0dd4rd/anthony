@@ -167,8 +167,7 @@ def try_short_circuit(user_input, user_input_lower, detected_app, auto_focused,
                 state = 'off'
             if state:
                 result = system_settings(action_name, state)
-                state_word = "enabled" if state == "on" else "disabled"
-                _speak(f"{setting_phrase.title()} {state_word}.")
+                _speak(result)
                 _log_shortcircuit(f"{setting_phrase} {state}", retrieval_start_time)
                 return True
             break
@@ -255,8 +254,7 @@ def try_short_circuit(user_input, user_input_lower, detected_app, auto_focused,
                         scr_h = primary['height']
                         tx, ty, tw, th = calc_fn(scr_w, scr_h)
                         result = window_control("move_resize", app_to_tile, x=tx, y=ty, width=tw, height=th)
-                        friendly = get_friendly_app_name(app_to_tile) if app_to_tile else "Window"
-                        _speak(f"Moved {friendly} to the {position}.")
+                        _speak(result)
                         _log_shortcircuit(f"tile {app_to_tile} to {position}", retrieval_start_time)
                         return True
                     except Exception as e:
@@ -279,50 +277,50 @@ def try_short_circuit(user_input, user_input_lower, detected_app, auto_focused,
     audio_handled = False
     if user_input_lower in ('mute', 'mute the sound', 'mute sound', 'mute audio'):
         result = audio_control("mute")
-        _speak("Muted.")
+        _speak(result)
         audio_handled = True
     elif any(user_input_lower == p for p in ('unmute', 'unmute the sound', 'unmute sound', 'unmute audio')):
         result = audio_control("unmute")
-        _speak("Unmuted.")
+        _speak(result)
         audio_handled = True
     elif any(p in user_input_lower for p in ('volume up', 'turn up', 'louder', 'raise the volume', 'raise volume', 'increase volume', 'increase the volume')):
         result = audio_control("volume", level=10, relative=True)
-        _speak("Volume up.")
+        _speak(result)
         audio_handled = True
     elif any(p in user_input_lower for p in ('volume down', 'turn down', 'quieter', 'lower the volume', 'lower volume', 'decrease volume', 'decrease the volume')):
         result = audio_control("volume", level=-10, relative=True)
-        _speak("Volume down.")
+        _speak(result)
         audio_handled = True
     elif 'volume' in user_input_lower:
         vol_match = re.search(r'(\d+)\s*%?', user_input_lower)
         if vol_match:
             level = int(vol_match.group(1))
             result = audio_control("volume", level=level, relative=False)
-            _speak(f"Volume set to {level}%.")
+            _speak(result)
             audio_handled = True
     elif user_input_lower in ('play', 'play music', 'resume', 'resume playback'):
         result = audio_control("play")
-        _speak("Playing.")
+        _speak(result)
         audio_handled = True
     elif user_input_lower in ('pause', 'pause music', 'pause playback'):
         result = audio_control("pause")
-        _speak("Paused.")
+        _speak(result)
         audio_handled = True
     elif user_input_lower in ('play pause', 'play/pause', 'toggle playback'):
         result = audio_control("play_pause")
-        _speak("Toggled playback.")
+        _speak(result)
         audio_handled = True
     elif user_input_lower in ('stop', 'stop music', 'stop playback', 'stop playing'):
         result = audio_control("stop")
-        _speak("Stopped.")
+        _speak(result)
         audio_handled = True
     elif user_input_lower in ('next', 'next song', 'next track', 'skip'):
         result = audio_control("next")
-        _speak("Next track.")
+        _speak(result)
         audio_handled = True
     elif user_input_lower in ('previous', 'previous song', 'previous track', 'go back'):
         result = audio_control("previous")
-        _speak("Previous track.")
+        _speak(result)
         audio_handled = True
     if audio_handled:
         _log_shortcircuit("audio control", retrieval_start_time)

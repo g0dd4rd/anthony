@@ -86,12 +86,21 @@ log_and_print("[SYSTEM] Loading Whisper model...")
 whisper_model = WhisperModel("medium.en", device="cpu", compute_type="int8")
 
 log_and_print("[SYSTEM] Loading Silero VAD model...")
-vad_model, vad_utils = torch.hub.load(
-    repo_or_dir='snakers4/silero-vad',
-    model='silero_vad',
-    force_reload=False,
-    onnx=False
-)
+_vad_cache = os.path.join(torch.hub.get_dir(), 'snakers4_silero-vad_master')
+if os.path.isdir(_vad_cache):
+    vad_model, vad_utils = torch.hub.load(
+        repo_or_dir=_vad_cache,
+        model='silero_vad',
+        source='local',
+        onnx=False
+    )
+else:
+    vad_model, vad_utils = torch.hub.load(
+        repo_or_dir='snakers4/silero-vad',
+        model='silero_vad',
+        force_reload=False,
+        onnx=False
+    )
 log_and_print("[SYSTEM] VAD model loaded.")
 
 VAD_THRESHOLD = 0.5

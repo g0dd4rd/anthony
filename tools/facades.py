@@ -27,6 +27,34 @@ def init(mcp_client, dialog_handler, smart_match_fn, friendly_name_fn):
     _get_friendly_app_name = friendly_name_fn
 
 
+def _verify_window_state(window_id, expected):
+    """Re-query list_windows and check expected state for a window.
+
+    Args:
+        window_id: Window ID to find.
+        expected: Dict of field names to expected values, e.g.
+                  {"focused": True} or {"minimized": True}.
+
+    Returns:
+        (matched, actual_window) where matched is True if all expected fields
+        match, and actual_window is the window dict (or None if not found/error).
+    """
+    try:
+        result = _mcp_client.call_tool("list_windows", {})
+        if result.startswith("Error"):
+            return None, None
+        windows = json.loads(result)
+        window = next((w for w in windows if w['id'] == window_id), None)
+        if window is None:
+            return False, None
+        for key, value in expected.items():
+            if window.get(key) != value:
+                return False, window
+        return True, window
+    except Exception:
+        return None, None
+
+
 def _call_vision(system_prompt, user_prompt, img_base64):
     payload = {
         'messages': [
@@ -137,6 +165,11 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
 
         if action == "focus":
             _mcp_client.call_tool("focus_window", {"window_id": window_id})
+            matched, _ = _verify_window_state(window_id, {"focused": True})
+            if matched is None:
+                return f"Focused {friendly_name}, but couldn't confirm"
+            if not matched:
+                return f"Tried to focus {friendly_name} but it doesn't appear focused"
             return f"Focused {friendly_name}"
 
         elif action == "close":
@@ -191,25 +224,48 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
 
         elif action == "minimize":
             _mcp_client.call_tool("minimize_window", {"window_id": window_id})
+            matched, _ = _verify_window_state(window_id, {"minimized": True})
+            if matched is None:
+                return f"Minimized {friendly_name}, but couldn't confirm"
+            if not matched:
+                return f"Tried to minimize {friendly_name} but it still appears on screen"
             return f"Minimized {friendly_name}"
 
         elif action == "maximize":
-            state = target_window.get('state', {})
-            is_maximized = state.get('maximized', False)
+            is_maximized = target_window.get('maximized', False)
             if is_maximized:
                 _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
+                matched, _ = _verify_window_state(window_id, {"maximized": False})
+                if matched is None:
+                    return f"Restored {friendly_name}, but couldn't confirm"
+                if not matched:
+                    return f"Tried to restore {friendly_name} but it's still maximized"
                 return f"Restored {friendly_name}"
             else:
                 _mcp_client.call_tool("maximize_window", {"window_id": window_id})
+                matched, _ = _verify_window_state(window_id, {"maximized": True})
+                if matched is None:
+                    return f"Maximized {friendly_name}, but couldn't confirm"
+                if not matched:
+                    return f"Tried to maximize {friendly_name} but window state didn't change"
                 return f"Maximized {friendly_name}"
 
         elif action == "restore":
-            state = target_window.get('state', {})
-            is_maximized = state.get('maximized', False)
+            is_maximized = target_window.get('maximized', False)
             _mcp_client.call_tool("unminimize_window", {"window_id": window_id})
             _mcp_client.call_tool("focus_window", {"window_id": window_id})
             if is_maximized:
                 _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
+            matched, actual = _verify_window_state(window_id, {"minimized": False, "maximized": False})
+            if matched is None:
+                return f"Restored {friendly_name}, but couldn't confirm"
+            if not matched and actual:
+                issues = []
+                if actual.get('minimized'):
+                    issues.append("still minimized")
+                if actual.get('maximized'):
+                    issues.append("still maximized")
+                return f"Tried to restore {friendly_name} but it's {' and '.join(issues)}"
             return f"Restored {friendly_name}"
 
         elif action == "screenshot":
@@ -244,8 +300,24 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 "width": width_int, "height": height_int
             })
 
-            size_changed = abs(width_int - old_width) > 50 or abs(height_int - old_height) > 50
-            position_changed = abs(x_int - old_x) > 50 or abs(y_int - old_y) > 50
+            _, actual = _verify_window_state(window_id, {})
+            if actual:
+                actual_x = actual.get('x', old_x)
+                actual_y = actual.get('y', old_y)
+                actual_w = actual.get('width', old_width)
+                actual_h = actual.get('height', old_height)
+            else:
+                actual_x, actual_y, actual_w, actual_h = x_int, y_int, width_int, height_int
+
+            pos_moved = abs(actual_x - old_x) > 50 or abs(actual_y - old_y) > 50
+            size_changed = abs(actual_w - old_width) > 50 or abs(actual_h - old_height) > 50
+            pos_matched = abs(actual_x - x_int) <= 50 and abs(actual_y - y_int) <= 50
+            size_matched = abs(actual_w - width_int) <= 50 and abs(actual_h - height_int) <= 50
+
+            if not pos_moved and not size_changed:
+                return f"Window {friendly_name} is already at the requested position and size"
+            if not pos_matched or not size_matched:
+                return f"Tried to move {friendly_name} but it didn't reach the requested position"
 
             position_description = None
             if x_int == 0 and width_int < 1000:
@@ -261,16 +333,14 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
             elif x_int > 900 and y_int == 0:
                 position_description = "top-right corner"
 
-            if position_description and position_changed:
+            if position_description:
                 return f"Moved {friendly_name} to the {position_description}"
-            elif size_changed and not position_changed:
-                return f"Resized {friendly_name} to {width_int}x{height_int}"
-            elif position_changed and not size_changed:
+            elif size_changed and not pos_moved:
+                return f"Resized {friendly_name} to {actual_w}x{actual_h}"
+            elif pos_moved and not size_changed:
                 return f"Moved {friendly_name}"
-            elif position_changed and size_changed:
-                return f"Moved and resized {friendly_name} to {width_int}x{height_int}"
             else:
-                return f"Window {friendly_name} is already at the requested position and size"
+                return f"Moved and resized {friendly_name} to {actual_w}x{actual_h}"
 
         else:
             return f"Unknown window action: {action}"
@@ -383,14 +453,58 @@ def audio_control(action: str, level: int = 0, relative: bool = False) -> str:
 
     try:
         if action == "volume":
-            return _mcp_client.call_tool("set_volume", {"volume": level, "relative": relative})
+            _mcp_client.call_tool("set_volume", {"volume": level, "relative": relative})
+            try:
+                status = json.loads(_mcp_client.call_tool("get_volume", {}))
+                return f"Volume set to {status['volume']}%"
+            except Exception:
+                return f"Volume adjusted, but couldn't confirm"
+
         elif action == "mute":
-            return _mcp_client.call_tool("mute_volume", {"mute": True})
+            _mcp_client.call_tool("mute_volume", {"mute": True})
+            try:
+                status = json.loads(_mcp_client.call_tool("get_volume", {}))
+                if status.get('muted'):
+                    return "Muted"
+                return "Tried to mute but audio is still unmuted"
+            except Exception:
+                return "Muted, but couldn't confirm"
+
         elif action == "unmute":
-            return _mcp_client.call_tool("mute_volume", {"mute": False})
+            _mcp_client.call_tool("mute_volume", {"mute": False})
+            try:
+                status = json.loads(_mcp_client.call_tool("get_volume", {}))
+                if not status.get('muted'):
+                    return "Unmuted"
+                return "Tried to unmute but audio is still muted"
+            except Exception:
+                return "Unmuted, but couldn't confirm"
+
         elif action in ["play", "pause", "play_pause", "next", "previous", "stop"]:
             mcp_action = action.replace("_", "-")
-            return _mcp_client.call_tool("media_control", {"action": mcp_action})
+            _mcp_client.call_tool("media_control", {"action": mcp_action})
+            try:
+                status = json.loads(_mcp_client.call_tool("get_media_status", {}))
+                if "error" in status:
+                    return "No media player found"
+                title = status.get('title', '')
+                player_status = status.get('status', '')
+                if action in ("play", "play_pause") and title:
+                    return f"Playing {title}" if player_status == "Playing" else f"Paused {title}"
+                elif action == "pause" and title:
+                    return f"Paused {title}"
+                elif action == "next" and title:
+                    return f"Skipped to {title}"
+                elif action == "previous" and title:
+                    return f"Back to {title}"
+                elif action == "stop":
+                    return "Stopped playback"
+                return f"{player_status}" if player_status else "Toggled playback"
+            except Exception:
+                labels = {"play": "Playing", "pause": "Paused", "play_pause": "Toggled playback",
+                          "next": "Next track", "previous": "Previous track", "stop": "Stopped"}
+                return f"{labels.get(action, 'Done')}, but couldn't confirm"
+
         else:
             return f"Unknown audio action: {action}"
     except Exception as e:
@@ -603,7 +717,17 @@ def workspace_control(action: str, index: int = 0) -> str:
             result = _mcp_client.call_tool("activate_workspace", {"index": index})
             if result.startswith("Error"):
                 return result
-            return f"Switched to workspace {index + 1}"
+            try:
+                ws_result = _mcp_client.call_tool("list_workspaces", {})
+                workspaces = json.loads(ws_result)
+                active = next((ws for ws in workspaces if ws.get('active')), None)
+                if active and active.get('index') == index:
+                    return f"Switched to workspace {index + 1}"
+                elif active:
+                    return f"Tried to switch to workspace {index + 1} but you're on workspace {active['index'] + 1}"
+                return f"Switched to workspace {index + 1}, but couldn't confirm"
+            except Exception:
+                return f"Switched to workspace {index + 1}, but couldn't confirm"
 
         else:
             return f"Unknown workspace action: {action}"

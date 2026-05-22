@@ -354,44 +354,55 @@ from voice_io import speak, listen_and_transcribe, check_audio_health
 # ----------------------------------------
 # Health Check & Auto-Recovery
 # ----------------------------------------
-def check_automation_health(auto_enable=True) -> tuple[bool, str]:
+def check_automation_health(auto_enable=True, retries=3) -> tuple[bool, str]:
     """
     Check if GNOME automation extension is running and enabled.
 
     Args:
         auto_enable: If True, automatically enable automation if it's disabled
+        retries: Number of attempts (D-Bus proxy may need time to introspect)
 
     Returns:
         (success: bool, message: str)
     """
-    try:
-        # Step 1: Ping the extension
-        ping_result = mcp_client.call_tool("ping", {})
-        if "Error" in ping_result or "alive" not in ping_result.lower():
-            return False, "GNOME automation extension not responding. Please check if it's installed and enabled in GNOME Extensions."
+    for attempt in range(retries):
+        try:
+            ping_result = mcp_client.call_tool("ping", {})
+            if "Error" in ping_result or "alive" not in ping_result.lower():
+                if attempt < retries - 1:
+                    time.sleep(1)
+                    continue
+                return False, "GNOME automation extension not responding. Please check if it's installed and enabled in GNOME Extensions."
 
-        # Step 2: Check if automation is enabled
-        enabled_result = mcp_client.call_tool("get_enabled", {})
-        if "Error" in enabled_result:
-            return False, f"Could not check automation status: {enabled_result}"
+            enabled_result = mcp_client.call_tool("get_enabled", {})
+            if "Error" in enabled_result:
+                if attempt < retries - 1:
+                    time.sleep(1)
+                    continue
+                return False, f"Could not check automation status: {enabled_result}"
 
-        is_enabled = "enabled" in enabled_result.lower() and "disabled" not in enabled_result.lower()
+            is_enabled = "enabled" in enabled_result.lower() and "disabled" not in enabled_result.lower()
 
-        if not is_enabled:
-            if auto_enable:
-                log_and_print("[SYSTEM] Automation is disabled. Auto-enabling...")
-                enable_result = mcp_client.call_tool("set_enabled", {"enabled": True})
-                if "Error" in enable_result:
-                    return False, f"Failed to enable automation: {enable_result}"
-                log_and_print("[SYSTEM] ✓ Automation enabled successfully")
-                return True, "Automation was disabled but has been auto-enabled"
-            else:
-                return False, "Automation is disabled. Say 'enable automation' to turn it on."
+            if not is_enabled:
+                if auto_enable:
+                    log_and_print("[SYSTEM] Automation is disabled. Auto-enabling...")
+                    enable_result = mcp_client.call_tool("set_enabled", {"enabled": True})
+                    if "Error" in enable_result:
+                        return False, f"Failed to enable automation: {enable_result}"
+                    log_and_print("[SYSTEM] ✓ Automation enabled successfully")
+                    return True, "Automation was disabled but has been auto-enabled"
+                else:
+                    return False, "Automation is disabled. Say 'enable automation' to turn it on."
 
-        return True, "Automation is healthy and ready"
+            return True, "Automation is healthy and ready"
 
-    except Exception as e:
-        return False, f"Health check failed: {e}"
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            return False, f"Health check failed: {e}"
+
+    return False, "Health check failed after retries"
 
 
 # ========================================
@@ -525,6 +536,29 @@ def run_agent():
         print()
 
     logger.info(f"[SYSTEM] Banner displayed (PTT={PUSH_TO_TALK_MODE})")
+
+    # Ensure GNOME Shell extension is enabled before starting MCP
+    _ext_uuid = "desktop-automation@anthonymcp.github.io"
+    try:
+        _global_disabled = subprocess.run(
+            ["gsettings", "get", "org.gnome.shell", "disable-user-extensions"],
+            capture_output=True, text=True, timeout=5)
+        if "true" in _global_disabled.stdout.lower():
+            log_and_print("[SYSTEM] User extensions globally disabled, enabling...")
+            subprocess.run(
+                ["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
+                timeout=5)
+            time.sleep(1)
+
+        _ext_check = subprocess.run(
+            ["gnome-extensions", "info", _ext_uuid],
+            capture_output=True, text=True, timeout=5)
+        if "Enabled: No" in _ext_check.stdout:
+            log_and_print("[SYSTEM] Enabling GNOME Shell extension...")
+            subprocess.run(["gnome-extensions", "enable", _ext_uuid], timeout=5)
+            time.sleep(1)
+    except Exception as e:
+        log_and_print(f"[SYSTEM] Could not check/enable extension: {e}", level='warning')
 
     log_and_print("[SYSTEM] Starting MCP client...")
     mcp_client.start()
