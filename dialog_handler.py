@@ -63,9 +63,13 @@ class DialogHandler:
             print("[A11Y]      Install with: pip install dogtail")
             sys.exit(1)
 
-    def find_dialogs(self) -> List[Dict]:
+    def find_dialogs(self, app_name=None) -> List[Dict]:
         """
-        Find all open dialogs/alerts on the desktop.
+        Find open dialogs/alerts, optionally filtered to a specific app.
+
+        Args:
+            app_name: AT-SPI application name to filter by. If provided,
+                      only that app's tree is searched (much faster).
 
         Returns list of dialog info dicts with:
         - element: dogtail element
@@ -78,10 +82,11 @@ class DialogHandler:
         dialogs = []
 
         try:
-            # Search for alert dialogs (most common for save prompts)
             for app in root.applications():
+                if app_name and app_name.lower() != app.name.lower():
+                    continue
+
                 try:
-                    # Find alerts/dialogs in this application
                     alert_elements = app.findChildren(
                         lambda x: x.roleName in ['alert', 'dialog'] and x.showing,
                         recursive=True,
@@ -169,7 +174,7 @@ class DialogHandler:
         print(f"[Dialog] Searching for dialogs (timeout: {timeout}s, app filter: {app_name or 'none'})...")
 
         while time.time() - start_time < timeout:
-            dialogs = self.find_dialogs()
+            dialogs = self.find_dialogs(app_name=app_name)
             checks += 1
 
             if checks == 1 or checks % 10 == 0:
@@ -177,11 +182,6 @@ class DialogHandler:
 
             for dialog in dialogs:
                 print(f"[Dialog]   - Dialog in '{dialog['app']}': '{dialog['name']}'")
-
-                # Filter by app if specified
-                if app_name and app_name.lower() not in dialog['app'].lower():
-                    print(f"[Dialog]     Skipped (app name doesn't match)")
-                    continue
 
                 # Check if this looks like a save dialog
                 info = self.get_dialog_info(dialog['element'])

@@ -104,7 +104,7 @@ LLAMA_SERVER_CONFIG = {
     'device': 'Vulkan0',
     'threads': 6,
     'parallel': 1,
-    'mmproj': os.path.expanduser('~/models/mmproj-gemma-4-E4B-it-Q8_0.gguf'),
+    'mmproj': os.path.expanduser('~/models/mmproj-gemma4-e4b-q8.gguf'),
 }
 
 # ========================================
@@ -244,7 +244,8 @@ def call_llama_server(messages, tools=None, temperature=0.0, max_tokens=200):
         'messages': messages,
         'temperature': temperature,
         'max_tokens': max_tokens,
-        'model': MODEL_NAME  # Required by API format
+        'model': MODEL_NAME,
+        'chat_template_kwargs': {'enable_thinking': False},
     }
 
     if tools:
@@ -410,8 +411,8 @@ def check_automation_health(auto_enable=True, retries=3) -> tuple[bool, str]:
 # ========================================
 import app_index
 from app_index import (build_app_index, smart_match_window, get_friendly_app_name,
-                       get_installed_gui_apps, retrieve_relevant_namespaces,
-                       build_filtered_tool_schema)
+                       get_installed_gui_apps, detect_app_in_input,
+                       retrieve_relevant_namespaces, build_filtered_tool_schema)
 
 # Facade tools loaded from tools/facades.py
 from tools.facades import (window_control, input_control, audio_control,
@@ -499,6 +500,17 @@ import llm_chain
 llm_chain.init(mcp_client, call_llama_server, speak,
                check_automation_health, debug=DEBUG)
 
+# Initialize new command pipeline (step definitions + matcher)
+import commands
+commands.init(mcp_client, speak, listen_and_transcribe,
+              smart_match_window, get_friendly_app_name,
+              dialog_handler, check_automation_health, get_installed_gui_apps)
+
+import command_matcher
+command_matcher.init(commands.registry, mcp_client, speak,
+                     app_index.embedding_model, detect_app_in_input,
+                     check_health_fn=check_automation_health)
+
 # Log app discovery
 live_app_list = get_installed_gui_apps()
 log_and_print(f"[SYSTEM] Found {live_app_list['count']} user-visible applications (samples: {', '.join(live_app_list['samples'][:3])})")
@@ -576,14 +588,9 @@ def run_agent():
         log_and_print(f"[SYSTEM] ⚠️  {health_msg}", level='warning')
         log_and_print("[SYSTEM] Some features may not work until automation is enabled.", level='warning')
 
-    # Command mode system message
-    from config.prompts import COMMAND_SYSTEM_MSG
-    command_system_msg = {"role": "system", "content": COMMAND_SYSTEM_MSG}
-
     # State variables
     current_mode = 'command'  # Start in command mode (explicit switching only)
     conversation_history = []
-    command_messages = [command_system_msg]
 
     # Check audio health (mic + output)
     log_and_print("[SYSTEM] Checking audio health...")
@@ -651,40 +658,15 @@ def run_agent():
             # Route to appropriate handler
             if intent_type == 'command':
               try:
-                # COMMAND MODE - execute desktop tools
                 log_and_print(f"[COMMAND] Processing: {user_input}")
-
-                command_messages.append({"role": "user", "content": user_input})
-
-                retrieval_start_time = time.time()
-
-                # Step 1: RAG retrieval + auto-focus + shortcut injection
-                relevant_namespaces, detected_app, auto_focused = \
-                    command_router.prepare_command_context(
-                        user_input, command_messages, retrieval_start_time)
-
-                # Step 2: Try short-circuit (skip LLM for simple commands)
-                if command_router.try_short_circuit(
-                        user_input, user_input_lower,
-                        detected_app, auto_focused,
-                        retrieval_start_time):
-                    continue
-
-                # Step 3: Build filtered tools and run LLM chain
-                filtered_tools = build_filtered_tool_schema(relevant_namespaces)
-                retrieval_elapsed = time.time() - retrieval_start_time
-                log_and_print(f"[TIMING] ⏱️  RAG retrieval took: {retrieval_elapsed:.3f}s ({len(filtered_tools)} tools)")
-
-                llm_chain.run_chain(
-                    command_messages, filtered_tools,
-                    available_tools, direct_mcp_tools,
-                    response_start_time)
-
+                result = command_matcher.execute(user_input)
+                if result is None:
+                    speak("I don't recognize that command. Say help for available commands.")
+                elif result:
+                    speak(result)
               except Exception as e:
                 log_and_print(f"[ERROR] Command failed: {e}", level='error')
                 speak("Sorry, that command failed.")
-              finally:
-                command_messages = [command_system_msg]
 
             else:  # intent_type == 'conversation'
                 # CONVERSATION MODE - chat with Gemma

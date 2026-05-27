@@ -246,7 +246,7 @@ def get_installed_gui_apps():
 
 
 # ----------------------------------------
-# RAG: Tool Retrieval + Filtering
+# App detection
 # ----------------------------------------
 
 _ambiguous_app_names = {
@@ -259,6 +259,23 @@ _ambiguous_app_names = {
     'boxes', 'scanner',
 }
 
+
+def detect_app_in_input(user_input: str) -> str:
+    """Detect an app name in user input. Returns the app name or None."""
+    user_input_lower = user_input.lower().rstrip('.!?,;')
+    words = [w.strip(string.punctuation) for w in user_input_lower.split()]
+    words = [w for w in words if w]
+    for n in range(len(words), 0, -1):
+        for i in range(len(words) - n + 1):
+            phrase = ' '.join(words[i:i+n])
+            if phrase in app_names_only and not (n == 1 and phrase in _ambiguous_app_names):
+                return phrase
+    return None
+
+
+# ----------------------------------------
+# RAG: Tool Retrieval + Filtering (legacy, to be removed)
+# ----------------------------------------
 
 def retrieve_relevant_namespaces(user_input: str, top_k: int = 2) -> tuple:
     """Retrieve most relevant namespaces using semantic similarity + verb routing.
