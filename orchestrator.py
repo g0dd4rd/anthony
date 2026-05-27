@@ -104,7 +104,7 @@ LLAMA_SERVER_CONFIG = {
     'device': 'Vulkan0',
     'threads': 6,
     'parallel': 1,
-    'mmproj': os.path.expanduser('~/models/mmproj-gemma-4-E4B-it-Q8_0.gguf'),
+    'mmproj': os.path.expanduser('~/models/mmproj-gemma4-e4b-q8.gguf'),
 }
 
 # ========================================
@@ -244,7 +244,8 @@ def call_llama_server(messages, tools=None, temperature=0.0, max_tokens=200):
         'messages': messages,
         'temperature': temperature,
         'max_tokens': max_tokens,
-        'model': MODEL_NAME  # Required by API format
+        'model': MODEL_NAME,
+        'chat_template_kwargs': {'enable_thinking': False},
     }
 
     if tools:

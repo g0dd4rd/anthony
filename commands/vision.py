@@ -23,7 +23,8 @@ def _call_vision(system_prompt, user_prompt, img_base64):
             ]}
         ],
         'temperature': 0.7,
-        'max_tokens': 800,
+        'max_tokens': 300,
+        'chat_template_kwargs': {'enable_thinking': False},
     }
     resp = requests.post(LLAMA_VISION_URL, json=payload, timeout=120)
     resp.raise_for_status()
@@ -64,8 +65,8 @@ def handle_describe_screen(context):
         img_data = base64.b64encode(f.read()).decode('utf-8')
 
     description = _call_vision(
-        'You are a screen reader for visually impaired users. Describe what you see in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.',
-        'What applications and windows are visible on this desktop screenshot?',
+        'Give a brief 2-3 sentence summary. Read the window title bar to identify the application. Use plain text, no markdown.',
+        'What is on this screen?',
         img_data
     )
 

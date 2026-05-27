@@ -68,6 +68,7 @@ def _call_vision(system_prompt, user_prompt, img_base64):
         ],
         'temperature': 0.7,
         'max_tokens': 800,
+        'chat_template_kwargs': {'enable_thinking': False},
     }
     resp = requests.post(LLAMA_VISION_URL, json=payload, timeout=120)
     resp.raise_for_status()
