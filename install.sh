@@ -132,6 +132,7 @@ PYTHON_PACKAGES=(
     "piper-tts"
     "mcp"
     "torch"
+    "torchaudio"
     "numpy"
     "parse"
     "sentence-transformers"
@@ -234,6 +235,7 @@ check_python_module "faster_whisper" || VERIFICATION_FAILED=1
 check_python_module "piper" || VERIFICATION_FAILED=1
 check_python_module "mcp" || VERIFICATION_FAILED=1
 check_python_module "torch" || VERIFICATION_FAILED=1
+check_python_module "torchaudio" || VERIFICATION_FAILED=1
 check_python_module "numpy" || VERIFICATION_FAILED=1
 check_python_module "sentence_transformers" || VERIFICATION_FAILED=1
 check_python_module "requests" || VERIFICATION_FAILED=1
