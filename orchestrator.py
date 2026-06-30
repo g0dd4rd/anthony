@@ -29,6 +29,14 @@ To change models, edit the MODEL CONFIGURATION section below
 import os
 import sys
 
+# Ensure Whisper model is cached before enabling offline mode
+from faster_whisper.utils import download_model as _dl_whisper
+try:
+    _dl_whisper("medium.en", local_files_only=True)
+except Exception:
+    print("[SYSTEM] Whisper model not cached, downloading (~1.5GB)...")
+    _dl_whisper("medium.en")
+
 # Force offline mode for sentence-transformers BEFORE import
 # This prevents internet checks to HuggingFace Hub
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
