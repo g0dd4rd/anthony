@@ -18,8 +18,18 @@ from utils import log_and_print
 # ----------------------------------------
 # TTS - Neural Voice
 # ----------------------------------------
+PIPER_VOICE_NAME = "en_US-lessac-medium"
+PIPER_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{PIPER_VOICE_NAME}.onnx")
+
+if not os.path.isfile(PIPER_MODEL_PATH):
+    log_and_print("[SYSTEM] Voice model not found, downloading...")
+    from piper.download_voices import download_voice
+    from pathlib import Path
+    download_voice(PIPER_VOICE_NAME, Path(os.path.dirname(PIPER_MODEL_PATH)))
+    log_and_print("[SYSTEM] Voice model downloaded.")
+
 log_and_print("[SYSTEM] Loading Neural Voice...")
-voice_model = PiperVoice.load("en_US-lessac-medium.onnx")
+voice_model = PiperVoice.load(PIPER_MODEL_PATH)
 log_and_print("[SYSTEM] Voice ready.")
 
 
