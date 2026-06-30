@@ -133,6 +133,7 @@ PYTHON_PACKAGES=(
     "mcp"
     "torch"
     "numpy"
+    "parse"
     "sentence-transformers"
     "requests"
     "webcolors"
