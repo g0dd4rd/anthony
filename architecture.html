@@ -519,16 +519,16 @@
       <dt class="stat-label">Operations</dt>
     </div>
     <div class="stat">
-      <dd class="stat-value">20+</dd>
-      <dt class="stat-label">Short-circuits</dt>
+      <dd class="stat-value">~95</dd>
+      <dt class="stat-label">Command patterns</dt>
     </div>
     <div class="stat">
-      <dd class="stat-value">~3.4K</dd>
+      <dd class="stat-value">~7.1K</dd>
       <dt class="stat-label">Lines of code</dt>
     </div>
     <div class="stat">
-      <dd class="stat-value">10</dd>
-      <dt class="stat-label">Modules</dt>
+      <dd class="stat-value">13</dd>
+      <dt class="stat-label">Command modules</dt>
     </div>
   </dl>
 </header>
@@ -587,8 +587,8 @@
     <div class="flow-branch">
       <div class="flow-step" role="listitem" style="border-color: var(--accent3);">
         <div class="step-label">Command Mode</div>
-        <div class="step-detail">App detection, auto-focus, shortcut injection, short-circuit checks, then RAG + LLM tool calling</div>
-        <div class="step-file">command_router.py + app_index.py</div>
+        <div class="step-detail">Pattern matching (~95 @step patterns) with semantic embedding fallback (sentence-transformers). Segment splitting, pronoun resolution, verb carry-forward.</div>
+        <div class="step-file">command_matcher.py + commands/ (13 modules)</div>
       </div>
       <div class="flow-step" role="listitem" style="border-color: var(--accent5);">
         <div class="step-label">Conversation Mode</div>
@@ -600,41 +600,25 @@
     <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
 
     <div class="flow-step" role="listitem" style="border-color: var(--accent3);">
-      <div class="step-label">Command: App Detection + Auto-Focus</div>
-      <div class="step-detail">Longest n-gram match against app index. If detected: focus window (or launch via GNOME Search + wait up to 5s). Pre-fetch and inject keyboard shortcuts into prompt.</div>
-      <div class="step-file">command_router.py &mdash; prepare_command_context() | app_index.py</div>
-    </div>
-
-    <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
-
-    <div class="flow-step" role="listitem" style="border-color: var(--accent3);">
-      <div class="step-label">Short-Circuit Check (20+ patterns)</div>
-      <div class="step-detail">Common commands (focus, mute, screenshot, brightness, battery, etc.) execute directly without LLM. Response time &lt;100ms.</div>
-      <div class="step-file">command_router.py &mdash; try_short_circuit()</div>
+      <div class="step-label">Pattern Matching (~95 @step patterns)</div>
+      <div class="step-detail">registry.match() tries exact patterns via the parse library across 13 command modules (window, audio, input, shortcuts, vision, etc.). Response time &lt;100ms.</div>
+      <div class="step-file">commands/__init__.py &mdash; CommandRegistry.match()</div>
     </div>
 
     <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
 
     <div class="flow-step" role="listitem" style="border-color: var(--accent2);">
-      <div class="step-label">RAG Namespace Selection</div>
-      <div class="step-detail">Cosine similarity on SentenceTransformer embeddings (all-MiniLM-L6-v2). Top K=2 namespaces. Forced routing: window verbs &rarr; window ns, app name &rarr; input ns.</div>
-      <div class="step-file">app_index.py &mdash; retrieve_relevant_namespaces(), build_filtered_tool_schema()</div>
-    </div>
-
-    <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
-
-    <div class="flow-step" role="listitem" style="border-color: var(--accent);">
-      <div class="step-label">LLM Tool Calling - Gemma 4 E4B (Q4_K_M)</div>
-      <div class="step-detail">llama-server on localhost:8081, Vulkan GPU (Intel Arc), temp=0.0, max 5 chaining steps. Truncation detection with auto-retry at 600 tokens.</div>
-      <div class="step-file">llm_chain.py &mdash; run_chain()</div>
+      <div class="step-label">Semantic Fallback (if no exact match)</div>
+      <div class="step-detail">Cosine similarity on SentenceTransformer embeddings (all-MiniLM-L6-v2) against all command patterns. Threshold 0.55. Finds the closest matching @step handler.</div>
+      <div class="step-file">command_matcher.py &mdash; _semantic_match()</div>
     </div>
 
     <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
 
     <div class="flow-step" role="listitem">
-      <div class="step-label">Tool Execution</div>
-      <div class="step-detail">Facade tools route to MCP server (anthony-mcp). Standalone tools call system commands directly. Results feed back to LLM for chaining.</div>
-      <div class="step-file">tools/facades.py, tools/standalone.py &mdash; MCP calls via mcp_client</div>
+      <div class="step-label">@step Handler Execution</div>
+      <div class="step-detail">Matched handler runs directly: MCP calls via anthony-mcp, system commands, or app-aware shortcut lookup. No LLM involved.</div>
+      <div class="step-file">commands/*.py &mdash; @step decorated handlers</div>
     </div>
 
     <div class="flow-arrow" role="presentation" aria-hidden="true"></div>
@@ -650,7 +634,7 @@
 
 <!-- MODULES -->
 <section id="modules">
-  <h2>Modules <span class="badge">10 files</span></h2>
+  <h2>Modules <span class="badge">core + 13 command modules</span></h2>
 
   <div class="module-grid">
     <div class="module-card">
@@ -658,7 +642,7 @@
         <span class="card-title">orchestrator.py</span>
         <span class="card-lines">681 lines</span>
       </div>
-      <div class="card-desc">Main entry point. Server lifecycle, MCP client, CLI args, run_agent() main loop with mode routing. Delegates command routing to command_router and LLM tool chaining to llm_chain.</div>
+      <div class="card-desc">Main entry point. Server lifecycle, MCP client, CLI args, run_agent() main loop with mode routing. Delegates command execution to command_matcher.</div>
       <div class="card-exports">
         <span>run_agent()</span>
         <span>call_llama_server()</span>
@@ -670,13 +654,39 @@
 
     <div class="module-card">
       <div class="card-header">
+        <span class="card-title">command_matcher.py</span>
+        <span class="card-lines">260 lines</span>
+      </div>
+      <div class="card-desc">Command routing: exact pattern matching via registry.match() (parse library), then semantic fallback via sentence-transformer embeddings (cosine similarity, threshold 0.55). Handles segment splitting, pronoun resolution, verb carry-forward.</div>
+      <div class="card-exports">
+        <span>execute()</span>
+        <span>_semantic_match()</span>
+        <span>_split_segments()</span>
+        <span>_resolve_pronouns()</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
+        <span class="card-title">commands/</span>
+        <span class="card-lines">13 modules</span>
+      </div>
+      <div class="card-desc">~95 @step decorated handlers across 13 modules: shortcuts (15), window (14), audio (13), system (10), brightness (10), input (8), vision (7), power (5), apps (3), search (3), settings (3), workspace (2), help (2). Registered via CommandRegistry at import time.</div>
+      <div class="card-exports">
+        <span>CommandRegistry</span>
+        <span>registry.match()</span>
+        <span>@step decorator</span>
+      </div>
+    </div>
+
+    <div class="module-card">
+      <div class="card-header">
         <span class="card-title">command_router.py</span>
         <span class="card-lines">476 lines</span>
       </div>
-      <div class="card-desc">Command preprocessing and short-circuit dispatch. RAG context preparation, app auto-focus, shortcut injection, and 14+ pattern-matched commands that bypass the LLM.</div>
+      <div class="card-desc">RAG context preparation, app auto-focus, shortcut injection.</div>
       <div class="card-exports">
         <span>prepare_command_context()</span>
-        <span>try_short_circuit()</span>
       </div>
     </div>
 
@@ -685,7 +695,7 @@
         <span class="card-title">llm_chain.py</span>
         <span class="card-lines">219 lines</span>
       </div>
-      <div class="card-desc">Agentic LLM tool-calling loop. Calls Gemma via llama-server, dispatches tool calls to MCP or facade wrappers, handles truncation retry and auto-recovery.</div>
+      <div class="card-desc">Agentic LLM tool-calling loop for conversation mode and vision. Calls Gemma 4 via llama-server, dispatches tool calls to MCP or facade wrappers, handles truncation retry.</div>
       <div class="card-exports">
         <span>run_chain()</span>
       </div>
@@ -1053,12 +1063,12 @@
 
   <div class="ext-grid">
     <div class="ext-card">
-      <h4><span class="dot" style="background: var(--accent);" aria-hidden="true"></span>llama-server</h4>
+      <h4><span class="dot" style="background: var(--accent);" aria-hidden="true"></span>llama-server (conversation &amp; vision)</h4>
       <ul>
-        <li>Gemma 4 E4B (Q4_K_M, 8B params)</li>
+        <li>Gemma 4 E2B (Q8_0, ~12-15 tok/s) or E4B (Q4_K_M, ~6-7 tok/s)</li>
         <li>OpenAI-compatible API on :8081</li>
         <li>Vulkan GPU (Intel Arc), 99 layers</li>
-        <li>4096 token context, ~6-7 tok/s</li>
+        <li>4096 token context, vision via mmproj</li>
       </ul>
     </div>
     <div class="ext-card">
@@ -1072,11 +1082,12 @@
       </ul>
     </div>
     <div class="ext-card">
-      <h4><span class="dot" style="background: var(--accent3);" aria-hidden="true"></span>Voice Models</h4>
+      <h4><span class="dot" style="background: var(--accent3);" aria-hidden="true"></span>Voice &amp; Embedding Models</h4>
       <ul>
         <li>Piper TTS (en_US-lessac-medium ONNX)</li>
         <li>Faster-Whisper (medium.en, int8 CPU)</li>
-        <li>Silero VAD (PyTorch)</li>
+        <li>Silero VAD (PyTorch + torchaudio)</li>
+        <li>all-MiniLM-L6-v2 (semantic command matching)</li>
         <li>All loaded at startup</li>
       </ul>
     </div>
@@ -1151,14 +1162,22 @@
     </div>
     <div class="step">
       <span class="step-num">11</span>
-      <span class="step-code"><span class="mod">mcp_client</span>.<span class="fn">start</span>() <span class="comment"># connect to anthony-mcp</span></span>
+      <span class="step-code"><span class="mod">commands</span>.<span class="fn">init</span>(<span class="arg">mcp_client, speak, listen, smart_match, friendly_name, dialog_handler, ...</span>) <span class="comment"># register ~95 @step handlers</span></span>
     </div>
     <div class="step">
       <span class="step-num">12</span>
-      <span class="step-code"><span class="fn">build_app_index</span>() <span class="comment"># Gio.AppInfo enumeration</span></span>
+      <span class="step-code"><span class="mod">command_matcher</span>.<span class="fn">init</span>(<span class="arg">registry, mcp_client, speak, embedding_model, detect_app</span>) <span class="comment"># pre-compute command embeddings</span></span>
     </div>
     <div class="step">
       <span class="step-num">13</span>
+      <span class="step-code"><span class="mod">mcp_client</span>.<span class="fn">start</span>() <span class="comment"># connect to anthony-mcp</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">14</span>
+      <span class="step-code"><span class="fn">build_app_index</span>() <span class="comment"># Gio.AppInfo enumeration</span></span>
+    </div>
+    <div class="step">
+      <span class="step-num">15</span>
       <span class="step-code"><span class="fn">check_automation_health</span>(<span class="arg">auto_enable=True</span>) <span class="comment"># verify + enable extension</span></span>
     </div>
   </div>
@@ -1191,27 +1210,30 @@
     </div>
   </div>
   <div class="perf-bar">
-    <span class="label" id="perf-sc">Short-circuit commands</span>
+    <span class="label" id="perf-sc">Pattern-matched commands</span>
     <div class="bar" role="meter" aria-labelledby="perf-sc" aria-valuenow="100" aria-valuemin="0" aria-valuemax="1000" aria-valuetext="less than 100 milliseconds">
       <div class="bar-fill" style="width: 5%; background: var(--accent);"></div>
       <span class="bar-value">&lt;0.1s</span>
     </div>
   </div>
   <div class="perf-bar">
-    <span class="label" id="perf-llm">Typical LLM tool call</span>
+    <span class="label" id="perf-llm">LLM (conversation/vision)</span>
     <div class="bar" role="meter" aria-labelledby="perf-llm" aria-valuenow="20" aria-valuemin="0" aria-valuemax="30" aria-valuetext="15 to 25 seconds">
       <div class="bar-fill" style="width: 85%; background: var(--accent5);"></div>
       <span class="bar-value">15-25s</span>
     </div>
   </div>
 
-  <h3>Short-Circuit Patterns (skip LLM entirely)</h3>
+  <h3>Command Patterns (~95 @step handlers, no LLM)</h3>
   <div class="sc-grid">
     <div class="sc-item"><span class="sc-cmd">focus/switch/open app</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">close window</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">minimize/maximize</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">take a screenshot</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">tile left/right/corner</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">next/previous/new tab</span><span class="sc-skip">app-aware</span></div>
+    <div class="sc-item"><span class="sc-cmd">copy/paste/cut/undo</span><span class="sc-skip">app-aware</span></div>
+    <div class="sc-item"><span class="sc-cmd">select all / find</span><span class="sc-skip">app-aware</span></div>
     <div class="sc-item"><span class="sc-cmd">mute/unmute</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">volume up/down/N%</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">play/pause/next/prev</span><span class="sc-skip">direct</span></div>
@@ -1220,11 +1242,10 @@
     <div class="sc-item"><span class="sc-cmd">dark mode on/off</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">wifi/bluetooth toggle</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">brightness up/down</span><span class="sc-skip">direct</span></div>
-    <div class="sc-item"><span class="sc-cmd">power saver/balanced</span><span class="sc-skip">direct</span></div>
+    <div class="sc-item"><span class="sc-cmd">zoom in/out/fullscreen</span><span class="sc-skip">app-aware</span></div>
     <div class="sc-item"><span class="sc-cmd">lock screen</span><span class="sc-skip">direct</span></div>
     <div class="sc-item"><span class="sc-cmd">suspend/restart/shutdown</span><span class="sc-skip">confirmed</span></div>
     <div class="sc-item"><span class="sc-cmd">install/uninstall app</span><span class="sc-skip">confirmed</span></div>
-    <div class="sc-item"><span class="sc-cmd">list applications</span><span class="sc-skip">direct</span></div>
   </div>
 </section>
 

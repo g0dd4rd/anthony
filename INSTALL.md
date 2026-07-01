@@ -38,6 +38,8 @@ The script will:
 - `webcolors` - Color name lookup for pick_color
 - `mcp` - Model Context Protocol client
 - `dogtail` - GNOME accessibility / dialog handling
+- `parse` - Pattern matching for command pipeline
+- `torchaudio` - Audio processing (required by Silero VAD)
 
 ### Anthony MCP
 - GNOME Shell extension for window/input/settings/media control
@@ -63,8 +65,8 @@ sudo dnf install -y alsa-utils portaudio-devel python3-devel pipewire-utils play
 
 ### 2. Python Packages
 ```bash
-pip install sounddevice pyaudio faster-whisper piper-tts mcp torch numpy \
-    sentence-transformers requests webcolors dogtail
+pip install sounddevice pyaudio faster-whisper piper-tts mcp torch torchaudio numpy \
+    sentence-transformers requests webcolors dogtail parse
 ```
 
 ### 3. Anthony MCP
@@ -84,8 +86,52 @@ python3 -m piper.download_voices --download-dir . en_US-lessac-medium
 gsettings set org.gnome.desktop.interface toolkit-accessibility true
 ```
 
-### 6. llama-server
-Build [llama.cpp](https://github.com/ggerganov/llama.cpp) with Vulkan backend and download a Gemma 4 GGUF model. See `start_llama_server.sh` for the launch command.
+### 6. llama-server (Gemma 4)
+
+Anthony uses Gemma 4 as its LLM for conversation mode and vision. It runs via llama-server with Vulkan GPU acceleration.
+
+#### Build llama.cpp
+
+```bash
+git clone https://github.com/ggerganov/llama.cpp.git ~/llama.cpp
+cd ~/llama.cpp
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release -j$(nproc)
+```
+
+#### Download and convert the model
+
+Download a Gemma 4 model from [Hugging Face](https://huggingface.co/google) in safetensors format. Two recommended variants:
+
+| Variant | Quantization | GGUF size | Speed |
+|---------|-------------|-----------|-------|
+| **Gemma 4 E2B** | Q8_0 | ~3GB | ~12-15 tok/s |
+| **Gemma 4 E4B** | Q4_K_M | ~5GB | ~6-7 tok/s |
+
+Convert and quantize (example for E4B):
+
+```bash
+mkdir -p ~/models
+
+# Convert HF safetensors to GGUF
+python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --outfile ~/models/gemma4-e4b.gguf
+
+# Quantize the base model
+~/llama.cpp/build/bin/llama-quantize ~/models/gemma4-e4b.gguf ~/models/gemma4-e4b-q4km.gguf Q4_K_M
+
+# Convert and quantize the vision projector (for screen description)
+python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --mmproj --outfile ~/models/mmproj-gemma4-e4b.gguf
+~/llama.cpp/build/bin/llama-quantize ~/models/mmproj-gemma4-e4b.gguf ~/models/mmproj-gemma4-e4b-q8.gguf Q8_0
+```
+
+#### Start the server
+
+```bash
+./start_llama_server.sh          # default: E2B
+./start_llama_server.sh e4b      # E4B variant
+```
+
+The orchestrator auto-starts llama-server if it's not already running. To change model paths or GPU settings, edit the `LLAMA_SERVER_CONFIG` section in `orchestrator.py`.
 
 ## Verification
 
@@ -94,8 +140,8 @@ Build [llama.cpp](https://github.com/ggerganov/llama.cpp) with Vulkan backend an
 which python3 pip anthony-mcp aplay pactl playerctl
 
 # Check Python modules
-python3 -c "import sounddevice, pyaudio, faster_whisper, piper, mcp, torch, \
-    sentence_transformers, requests, webcolors, dogtail"
+python3 -c "import sounddevice, pyaudio, faster_whisper, piper, mcp, torch, torchaudio, \
+    sentence_transformers, requests, webcolors, dogtail, parse"
 
 # Check Piper model
 ls -lh ~/anthony/en_US-lessac-medium.onnx*
@@ -150,8 +196,8 @@ gsettings set org.gnome.desktop.interface toolkit-accessibility true
 
 ```bash
 # Python packages
-pip uninstall sounddevice pyaudio faster-whisper piper-tts mcp torch numpy \
-    sentence-transformers requests webcolors dogtail
+pip uninstall sounddevice pyaudio faster-whisper piper-tts mcp torch torchaudio numpy \
+    sentence-transformers requests webcolors dogtail parse
 
 # MCP server
 pip uninstall anthony-mcp

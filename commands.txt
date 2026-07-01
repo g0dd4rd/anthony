@@ -43,6 +43,19 @@ KEYBOARD & MOUSE INPUT
   "drag from 100 100 to 500 500"
 
 
+APP SHORTCUTS (auto-detected for the focused app)
+--------------------------------------------------
+  "next tab" / "previous tab"
+  "new tab" / "close tab"
+  "select all"
+  "copy" / "paste" / "cut"
+  "undo" / "redo"
+  "find" / "find in page"
+  "zoom in" / "zoom out"
+  "full screen"
+  "new window"
+
+
 APP SHORTCUTS LOOKUP
 --------------------
   "what are the shortcuts for firefox"

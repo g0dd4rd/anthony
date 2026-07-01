@@ -22,16 +22,16 @@ Voice Input (mic)
               ┌───────────────┼───────────────┐
               ▼               ▼               ▼
      ┌────────────┐  ┌──────────────┐  ┌─────────────┐
-     │ command_    │  │  llm_chain   │  │ conversation │
-     │ router.py  │  │  .py         │  │ .py          │
-     │ (patterns) │  │ (LLM calls)  │  │ (chat mode)  │
-     └─────┬──────┘  └──────┬───────┘  └─────────────┘
-           │                │
-           ▼                ▼
-     ┌──────────────────────────┐
-     │    tools/ (facades +     │
-     │    standalone actions)   │
-     └────────────┬─────────────┘
+     │ command_    │  │  commands/   │  │ conversation │
+     │ matcher.py  │  │  (13 @step  │  │ .py          │
+     │ (routing)   │  │   modules)  │  │ (chat mode)  │
+     └─────┬──────┘  └──────┬───────┘  └──────┬──────┘
+           │                │                  │
+           ▼                ▼                  ▼
+     ┌──────────────────────────┐     ┌──────────────┐
+     │    tools/ (facades +     │     │  llm_chain   │
+     │    standalone actions)   │     │  .py (LLM)   │
+     └────────────┬─────────────┘     └──────────────┘
                   │ MCP protocol (stdio)
                   ▼
      ┌──────────────────────────┐
@@ -45,12 +45,13 @@ Voice Input (mic)
 
 1. **Voice capture** — `voice_io.py` uses Silero VAD for continuous listening, then Whisper (faster-whisper) for transcription
 2. **Mode routing** — `orchestrator.py` checks current mode: `command` or `conversation`
-3. **Command path:**
-   - `command_router.prepare_command_context()` — RAG namespace retrieval via sentence-transformers + app detection + shortcut injection
-   - `command_router.try_short_circuit()` — pattern matching handles simple commands without LLM (~50ms)
-   - `llm_chain.run_chain()` — LLM tool-calling loop for complex commands (up to 5 chained steps)
-4. **Tool execution** — facade tools (`tools/facades.py`) or standalone tools (`tools/standalone.py`) call anthony-mcp via MCP protocol
-5. **Voice output** — `voice_io.py` synthesizes response with Piper TTS
+3. **Command path** — `command_matcher.execute()`:
+   - **Pattern matching** — `registry.match()` tries ~95 exact patterns from `commands/` @step handlers via the `parse` library
+   - **Semantic fallback** — if no exact match, sentence-transformer embeddings find the closest command (cosine similarity, threshold 0.55)
+   - Supports segment splitting ("open firefox and maximize it"), pronoun resolution, verb carry-forward
+4. **Conversation path** — `conversation.py` handles chat mode via `llm_chain.run_chain()` (Gemma 4 LLM, up to 5 chained tool-calling steps)
+5. **Tool execution** — @step handlers, facade tools (`tools/facades.py`), or standalone tools (`tools/standalone.py`) call anthony-mcp via MCP protocol
+6. **Voice output** — `voice_io.py` synthesizes response with Piper TTS
 
 ## Module Map
 
@@ -59,14 +60,36 @@ Voice Input (mic)
 | File | Purpose |
 |---|---|
 | `orchestrator.py` | Entry point. Manages llama-server lifecycle, initializes all modules, runs the voice loop. CLI args: `--ptt`, `--debug`, `--restart-server`, `--kill-server` |
+| `command_matcher.py` | Command routing: exact pattern matching via `registry.match()`, then semantic fallback via sentence-transformer embeddings. Handles segment splitting, pronoun resolution, verb carry-forward |
 | `voice_io.py` | STT (faster-whisper + Silero VAD) and TTS (Piper). Exports `speak()`, `listen_and_transcribe()`, `check_audio_health()` |
-| `command_router.py` | Two-stage command handling: (1) RAG context preparation with namespace retrieval + auto-focus, (2) short-circuit pattern matching for ~30 command types without LLM |
-| `llm_chain.py` | Agentic tool-calling loop. Sends messages + filtered tool schemas to llama-server, processes tool_calls, chains results back, handles truncation retry |
-| `conversation.py` | Chat mode. Intent classifier (command vs conversation) and multi-turn conversation handler |
-| `app_index.py` | Application indexing via Gio.AppInfo + semantic search. Builds app name map, smart window matching, RAG namespace retrieval using sentence-transformers embeddings |
+| `command_router.py` | RAG context preparation with namespace retrieval + auto-focus |
+| `llm_chain.py` | Agentic tool-calling loop for conversation mode and vision. Sends messages + filtered tool schemas to llama-server, processes tool_calls, chains results back |
+| `conversation.py` | Chat mode. Multi-turn conversation handler using llm_chain |
+| `app_index.py` | Application indexing via Gio.AppInfo + semantic search. Builds app name map, smart window matching, embedding model management |
 | `dialog_handler.py` | Safe close handling via dogtail (a11y). Detects save/discard dialogs, reads options to user, activates buttons via keyboard |
 | `mcp_client.py` | Standalone MCP client for testing. Thread-based async bridge with command/result queues |
 | `utils.py` | Logging setup (rotating file handler) and `log_and_print()` helper |
+
+### commands/
+
+13 command modules with ~95 `@step` decorated handlers. Each handler defines one or more voice patterns and is registered in `CommandRegistry` at import time. The registry is used by `command_matcher.py` for pattern matching and semantic fallback.
+
+| File | Patterns | Purpose |
+|---|---|---|
+| `__init__.py` | — | `CommandRegistry` class, `step` decorator, `registry.match()` |
+| `shortcuts.py` | 15 | App-aware shortcuts: tab navigation, clipboard, undo/redo, zoom, find |
+| `window.py` | 14 | Window control: focus, close, minimize, tile, move |
+| `audio.py` | 13 | Volume, mute, media playback |
+| `system.py` | 10 | Date/time, notifications, system info |
+| `brightness.py` | 10 | Screen and keyboard brightness |
+| `input.py` | 8 | Key press, type text, mouse click, scroll, drag |
+| `vision.py` | 7 | Screenshot, screen description, color pick |
+| `power.py` | 5 | Suspend, shutdown, restart, logout, lock |
+| `apps.py` | 3 | Launch/focus applications |
+| `search.py` | 3 | Open files, URLs, search |
+| `settings.py` | 3 | Dark mode, wallpaper, night light |
+| `workspace.py` | 2 | Workspace switching |
+| `help.py` | 2 | Help and command listing |
 
 ### tools/
 
@@ -99,8 +122,8 @@ Voice Input (mic)
 ### RAG Tool Retrieval (app_index.py)
 Instead of sending all 13 tools to the LLM, semantic similarity + verb-based routing selects the top 2 relevant namespaces (~4-6 tools). This further reduces LLM context and improves accuracy.
 
-### Hybrid Routing (command_router.py)
-Fast pattern matching handles simple commands (<100ms) without calling the LLM. Complex commands fall through to the LLM tool-calling chain (1-2s). This gives instant response for common operations.
+### Hybrid Routing (command_matcher.py)
+`registry.match()` tries exact `parse` patterns first (~95 patterns across 13 `commands/` modules). If no exact match, sentence-transformer embeddings find the closest command via cosine similarity (threshold 0.55). Most commands resolve in <100ms without calling the LLM. The LLM is only used for conversation mode and vision tasks.
 
 ### Dependency Injection
 Modules use `init()` functions to receive runtime dependencies (mcp_client, speak, etc.) rather than circular imports. The orchestrator wires everything together at startup.
@@ -117,8 +140,11 @@ When closing a window, the system checks for save dialogs via a11y (dogtail), re
 - **sentence-transformers** `all-MiniLM-L6-v2` — tool retrieval embeddings (CPU)
 
 ### LLM Server (separate process)
-- **llama-server** (llama.cpp) running gemma4-e4b with Vulkan GPU acceleration on port 8081
+- **llama-server** (llama.cpp) running Gemma 4 with Vulkan GPU acceleration on port 8081
 - OpenAI-compatible HTTP API with vision support (mmproj)
+- Two supported variants: E2B (Q8_0, ~3GB, faster) or E4B (Q4_K_M, ~5GB, higher quality)
+- Models stored in `~/models/`, converted from HF safetensors via `convert_hf_to_gguf.py` and quantized with `llama-quantize`
+- See `start_llama_server.sh` for launch commands and `INSTALL.md` for full build/convert/quantize steps
 
 ### Companion Repo
 - **anthony-mcp** — GNOME Shell extension + MCP server providing desktop automation tools (window management, input simulation, screenshots, system settings, etc.)

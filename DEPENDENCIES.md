@@ -14,6 +14,8 @@
 | webcolors | Color name lookup for pick_color |
 | mcp | MCP client (Model Context Protocol) |
 | dogtail | GNOME accessibility / dialog detection via AT-SPI |
+| parse | Pattern matching for command pipeline |
+| torchaudio | Audio processing (required by Silero VAD) |
 
 ## System packages (Fedora/RHEL)
 | Package | Purpose |
