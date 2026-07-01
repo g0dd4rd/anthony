@@ -28,8 +28,9 @@ def init(mcp_client, speak_fn, listen_fn, smart_match_fn, friendly_name_fn,
     _check_automation_health = check_health_fn
     _get_installed_gui_apps = get_installed_gui_apps_fn
 
-    from commands import (audio, search, workspace, window, input, settings,
-                          vision, system, power, brightness, apps, help)
+    from commands import (audio, shortcuts, search, workspace, window, input,
+                          settings, vision, system, power, brightness, apps,
+                          help)
 
 
 class CommandRegistry:

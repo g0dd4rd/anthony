@@ -6,11 +6,25 @@ from utils import log_and_print
 
 DIALOG_CHECK_SHORTCUTS = {'Alt+F4', 'Ctrl+Q', 'Ctrl+W', 'Ctrl+Shift+W'}
 
+_MULTI_WORD_KEY_MAP = {
+    'page down': 'Page_Down', 'page-down': 'Page_Down', 'pagedown': 'Page_Down',
+    'page up': 'Page_Up', 'page-up': 'Page_Up', 'pageup': 'Page_Up',
+    'caps lock': 'Caps_Lock', 'caps-lock': 'Caps_Lock', 'capslock': 'Caps_Lock',
+    'num lock': 'Num_Lock', 'num-lock': 'Num_Lock', 'numlock': 'Num_Lock',
+    'scroll lock': 'Scroll_Lock', 'scroll-lock': 'Scroll_Lock',
+    'print screen': 'Print', 'print-screen': 'Print',
+    'left arrow': 'Left', 'right arrow': 'Right',
+    'up arrow': 'Up', 'down arrow': 'Down',
+}
+
 _KEY_NAME_MAP = {
     'control': 'ctrl', 'command': 'super',
     'escape': 'Escape', 'enter': 'Return', 'return': 'Return',
     'delete': 'Delete', 'backspace': 'BackSpace',
     'tab': 'Tab', 'space': 'space',
+    'home': 'Home', 'end': 'End', 'insert': 'Insert',
+    'up': 'Up', 'down': 'Down', 'left': 'Left', 'right': 'Right',
+    'print': 'Print', 'plus': 'plus', 'minus': 'minus',
 }
 
 
@@ -64,17 +78,19 @@ def handle_type(context, text):
       category='input', help_text='Press a key or key combination (e.g., ctrl+c, enter, escape)')
 def handle_key_press(context, keys):
     normalized = keys.strip()
-    normalized = re.sub(r'(?<=[a-zA-Z])-(?=[a-zA-Z])', '+', normalized)
-    if " " in normalized and "+" not in normalized:
-        normalized = normalized.replace(" ", "+")
+
+    for phrase, gdk_name in _MULTI_WORD_KEY_MAP.items():
+        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+        normalized = pattern.sub(gdk_name, normalized)
+
+    normalized = re.sub(r'(?<=[a-zA-Z])-(?=[a-zA-Z0-9])', '+', normalized)
+
+    normalized = normalized.replace(" ", "+")
     parts = normalized.split('+')
     parts = [_KEY_NAME_MAP.get(p.lower(), p) for p in parts]
     normalized = '+'.join(parts)
 
-    if '+' in normalized:
-        _mcp_client.call_tool("key_combo", {"keys": normalized})
-    else:
-        _mcp_client.call_tool("key_press", {"key": normalized})
+    _send_key_via_mcp(normalized)
 
     dialog_result = _handle_dialog_after_shortcut(normalized)
     if dialog_result:
