@@ -65,9 +65,20 @@ def _handle_dialog_after_shortcut(normalized):
 
 # --- Type text ---
 
+_MATH_OPERATORS = {
+    'plus': '+', 'minus': '-', 'times': '*', 'divided by': '/',
+    'equals': '=',
+}
+
+def _restore_math_operators(text):
+    for word, symbol in _MATH_OPERATORS.items():
+        text = re.sub(rf'(?<=\d)\s+{word}\s+(?=\d)', f' {symbol} ', text)
+    return text
+
 @step('type {text}',
       category='input', help_text='Type text character by character')
 def handle_type(context, text):
+    text = _restore_math_operators(text)
     _mcp_client.call_tool("type_text", {"text": text})
     return f"Typed: {text}"
 

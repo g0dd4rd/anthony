@@ -320,6 +320,10 @@ _TILE_POSITIONS = {
     'the right':    lambda w, h: (w // 2, 0, w // 2, h),
     'left':         lambda w, h: (0, 0, w // 2, h),
     'right':        lambda w, h: (w // 2, 0, w // 2, h),
+    'to left':      lambda w, h: (0, 0, w // 2, h),
+    'to right':     lambda w, h: (w // 2, 0, w // 2, h),
+    'to the left':  lambda w, h: (0, 0, w // 2, h),
+    'to the right': lambda w, h: (w // 2, 0, w // 2, h),
     'top':          lambda w, h: (0, 0, w, h // 2),
     'bottom':       lambda w, h: (0, h // 2, w, h // 2),
     'center':       lambda w, h: (w // 4, h // 4, w // 2, h // 2),
@@ -366,6 +370,7 @@ def _tile_window(app_name, position):
 
 @step('move {app} to the {position}', 'tile {app} to the {position}',
       'snap {app} to the {position}', 'put {app} on the {position}',
+      'snap {app} {position}', 'tile {app} {position}', 'move {app} {position}',
       category='window', help_text='Tile a window to a screen position')
 def handle_tile_app(context, app, position):
     return _tile_window(app, position)
