@@ -484,3 +484,160 @@ def handle_window_screenshot(context, app):
     if result.startswith("Error"):
         return result
     return f"Screenshot of {friendly} saved to Screenshots."
+
+
+# --- Move to monitor ---
+
+
+def _move_to_monitor(app_name, monitor_target):
+    """Move a window to another monitor.
+
+    monitor_target: "other" or a 1-based monitor number.
+    """
+    if app_name:
+        target, _ = _find_window(app_name)
+    else:
+        target = _get_focused_window()
+    if not target:
+        return "No window to move"
+
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
+    current_monitor = target.get("monitor", 0)
+
+    try:
+        mon_result = _mcp_client.call_tool("get_monitors", {})
+        monitors = json.loads(mon_result)
+    except Exception:
+        return "Could not get monitor information"
+
+    if len(monitors) < 2:
+        return "Only one monitor detected"
+
+    if monitor_target == "other":
+        dest = next((m for m in monitors if m["index"] != current_monitor), None)
+    else:
+        dest_index = int(monitor_target) - 1
+        dest = next((m for m in monitors if m["index"] == dest_index), None)
+
+    if not dest:
+        return f"Monitor {monitor_target} not found"
+
+    dest_x = dest["x"] + (dest["width"] - target["width"]) // 2
+    dest_y = dest["y"] + (dest["height"] - target["height"]) // 2
+    _mcp_client.call_tool(
+        "move_resize_window",
+        {
+            "window_id": window_id,
+            "x": dest_x,
+            "y": dest_y,
+            "width": target["width"],
+            "height": target["height"],
+        },
+    )
+    return f"Moved {friendly} to monitor {dest['index'] + 1}"
+
+
+@step(
+    "move {app} to other monitor",
+    "move {app} to the other monitor",
+    "send {app} to other monitor",
+    category="window",
+    help_text="Move an application to the other monitor",
+)
+def handle_move_to_other_monitor(context, app):
+    return _move_to_monitor(app, "other")
+
+
+@step(
+    "move to other monitor",
+    "move window to other monitor",
+    "move to the other monitor",
+    "send to other monitor",
+    category="window",
+    help_text="Move the focused window to the other monitor",
+)
+def handle_move_focused_to_other_monitor(context):
+    return _move_to_monitor(None, "other")
+
+
+@step(
+    "move {app} to monitor {n:d}",
+    "send {app} to monitor {n:d}",
+    category="window",
+    help_text="Move an application to a specific monitor",
+)
+def handle_move_to_monitor_n(context, app, n):
+    return _move_to_monitor(app, str(n))
+
+
+@step(
+    "move to monitor {n:d}",
+    "move window to monitor {n:d}",
+    "send to monitor {n:d}",
+    category="window",
+    help_text="Move the focused window to a specific monitor",
+)
+def handle_move_focused_to_monitor_n(context, n):
+    return _move_to_monitor(None, str(n))
+
+
+# --- Focus next instance ---
+
+
+def _find_all_matching_windows(app_name, windows):
+    """Find all windows matching an app name by wmClass."""
+    from app_index import app_name_map
+
+    app_lower = app_name.lower()
+    resolved_exec = app_name_map.get(app_lower)
+    matches = []
+
+    for w in windows:
+        wm_class = w.get("wmClass", "")
+        wm_lower = wm_class.lower()
+        normalized = wm_lower.replace("org.gnome.", "").replace("org.", "")
+        normalized = normalized.replace("-", "").replace("_", "")
+        search = app_lower.replace(" ", "").replace("-", "").replace("_", "")
+
+        if resolved_exec and (
+            resolved_exec.lower() in wm_lower or wm_lower in resolved_exec.lower()
+        ):
+            matches.append(w)
+        elif search in normalized or app_lower in wm_lower:
+            matches.append(w)
+
+    return matches
+
+
+@step(
+    "focus other {app}",
+    "focus next {app}",
+    "next {app} window",
+    "other {app} window",
+    "other {app}",
+    category="window",
+    help_text="Cycle focus between multiple windows of the same app",
+)
+def handle_focus_next_instance(context, app):
+    windows = _list_windows()
+    if not windows:
+        return "No windows open"
+
+    matches = _find_all_matching_windows(app, windows)
+    if not matches:
+        return f"No window found matching '{app}'"
+    if len(matches) == 1:
+        friendly = _get_friendly_app_name(matches[0].get("wmClass", app))
+        _mcp_client.call_tool("focus_window", {"window_id": matches[0]["id"]})
+        return f"Only one {friendly} window open"
+
+    focused_idx = next(
+        (i for i, w in enumerate(matches) if w.get("focused", False)),
+        -1,
+    )
+    next_idx = (focused_idx + 1) % len(matches)
+    next_win = matches[next_idx]
+    friendly = _get_friendly_app_name(next_win.get("wmClass", app))
+    _mcp_client.call_tool("focus_window", {"window_id": next_win["id"]})
+    return f"Focused next {friendly} window"
