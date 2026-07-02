@@ -29,7 +29,7 @@ To change models, edit the MODEL CONFIGURATION section below
 import os
 import sys
 
-# Ensure Whisper model is cached before enabling offline mode
+# Ensure models are cached, then enable offline mode to avoid HuggingFace Hub checks
 from faster_whisper.utils import download_model as _dl_whisper
 try:
     _dl_whisper("medium.en", local_files_only=True)
@@ -37,8 +37,14 @@ except Exception:
     print("[SYSTEM] Whisper model not cached, downloading (~1.5GB)...")
     _dl_whisper("medium.en")
 
-# Force offline mode for sentence-transformers BEFORE import
-# This prevents internet checks to HuggingFace Hub
+from sentence_transformers import SentenceTransformer as _ST
+try:
+    _ST('all-MiniLM-L6-v2', device='cpu', local_files_only=True)
+except Exception:
+    print("[SYSTEM] Embedding model not cached, downloading (~90MB)...")
+    _ST('all-MiniLM-L6-v2', device='cpu')
+del _ST
+
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 os.environ['HF_HUB_OFFLINE'] = '1'
 
