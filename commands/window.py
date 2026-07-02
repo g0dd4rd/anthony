@@ -1,7 +1,7 @@
 import json
 import time
 
-from app_index import app_name_map
+import app_index
 from commands import (
     _dialog_handler,
     _get_friendly_app_name,
@@ -21,10 +21,10 @@ def _resolve_atspi_name(wm_class):
     """Resolve wmClass to AT-SPI app name via app_name_map + APP_A11Y_NAMES."""
     if not wm_class:
         return None
-    exec_name = app_name_map.get(wm_class.lower())
+    exec_name = app_index.app_name_map.get(wm_class.lower())
     if not exec_name:
         stripped = wm_class.replace("org.gnome.", "").replace("org.", "")
-        exec_name = app_name_map.get(stripped.lower())
+        exec_name = app_index.app_name_map.get(stripped.lower())
     if exec_name:
         return APP_A11Y_NAMES.get(exec_name)
     return APP_A11Y_NAMES.get(wm_class.lower())
@@ -105,6 +105,48 @@ def _handle_save_dialog(window_id=None, atspi_name=None):
 
 
 # --- Focus / Open ---
+
+
+def _find_all_matching_windows(app_name, windows):
+    """Find all windows matching an app name by wmClass."""
+    first_match = _smart_match_window(app_name, windows)
+    if not first_match:
+        return []
+    target_wm = first_match.get("wmClass", "")
+    return [w for w in windows if w.get("wmClass", "") == target_wm]
+
+
+@step(
+    "focus other {app}",
+    "focus next {app}",
+    "next {app} window",
+    "other {app} window",
+    "other {app}",
+    category="window",
+    help_text="Cycle focus between multiple windows of the same app",
+)
+def handle_focus_next_instance(context, app):
+    windows = _list_windows()
+    if not windows:
+        return "No windows open"
+
+    matches = _find_all_matching_windows(app, windows)
+    if not matches:
+        return f"No window found matching '{app}'"
+    if len(matches) == 1:
+        friendly = _get_friendly_app_name(matches[0].get("wmClass", app))
+        _mcp_client.call_tool("focus_window", {"window_id": matches[0]["id"]})
+        return f"Only one {friendly} window open"
+
+    focused_idx = next(
+        (i for i, w in enumerate(matches) if w.get("focused", False)),
+        -1,
+    )
+    next_idx = (focused_idx + 1) % len(matches)
+    next_win = matches[next_idx]
+    friendly = _get_friendly_app_name(next_win.get("wmClass", app))
+    _mcp_client.call_tool("focus_window", {"window_id": next_win["id"]})
+    return f"Focused next {friendly} window"
 
 
 @step(
@@ -433,13 +475,11 @@ def _tile_window(app_name, position):
 
 
 @step(
-    "move {app} to the {position}",
     "tile {app} to the {position}",
     "snap {app} to the {position}",
     "put {app} on the {position}",
     "snap {app} {position}",
     "tile {app} {position}",
-    "move {app} {position}",
     category="window",
     help_text="Tile a window to a screen position",
 )
@@ -450,8 +490,6 @@ def handle_tile_app(context, app, position):
 @step(
     "tile {position}",
     "snap {position}",
-    "move to the {position}",
-    "move to {position}",
     category="window",
     help_text="Tile the focused window to a position",
 )
@@ -582,62 +620,31 @@ def handle_move_focused_to_monitor_n(context, n):
     return _move_to_monitor(None, str(n))
 
 
-# --- Focus next instance ---
-
-
-def _find_all_matching_windows(app_name, windows):
-    """Find all windows matching an app name by wmClass."""
-    from app_index import app_name_map
-
-    app_lower = app_name.lower()
-    resolved_exec = app_name_map.get(app_lower)
-    matches = []
-
-    for w in windows:
-        wm_class = w.get("wmClass", "")
-        wm_lower = wm_class.lower()
-        normalized = wm_lower.replace("org.gnome.", "").replace("org.", "")
-        normalized = normalized.replace("-", "").replace("_", "")
-        search = app_lower.replace(" ", "").replace("-", "").replace("_", "")
-
-        if resolved_exec and (
-            resolved_exec.lower() in wm_lower or wm_lower in resolved_exec.lower()
-        ):
-            matches.append(w)
-        elif search in normalized or app_lower in wm_lower:
-            matches.append(w)
-
-    return matches
+_ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4}
 
 
 @step(
-    "focus other {app}",
-    "focus next {app}",
-    "next {app} window",
-    "other {app} window",
-    "other {app}",
+    "move {app} to the {ordinal} monitor",
+    "send {app} to the {ordinal} monitor",
     category="window",
-    help_text="Cycle focus between multiple windows of the same app",
+    help_text="Move an application to a monitor by ordinal name",
 )
-def handle_focus_next_instance(context, app):
-    windows = _list_windows()
-    if not windows:
-        return "No windows open"
+def handle_move_to_monitor_ordinal(context, app, ordinal):
+    n = _ORDINALS.get(ordinal.lower())
+    if n is None:
+        return f"Unknown monitor position '{ordinal}'"
+    return _move_to_monitor(app, str(n))
 
-    matches = _find_all_matching_windows(app, windows)
-    if not matches:
-        return f"No window found matching '{app}'"
-    if len(matches) == 1:
-        friendly = _get_friendly_app_name(matches[0].get("wmClass", app))
-        _mcp_client.call_tool("focus_window", {"window_id": matches[0]["id"]})
-        return f"Only one {friendly} window open"
 
-    focused_idx = next(
-        (i for i, w in enumerate(matches) if w.get("focused", False)),
-        -1,
-    )
-    next_idx = (focused_idx + 1) % len(matches)
-    next_win = matches[next_idx]
-    friendly = _get_friendly_app_name(next_win.get("wmClass", app))
-    _mcp_client.call_tool("focus_window", {"window_id": next_win["id"]})
-    return f"Focused next {friendly} window"
+@step(
+    "move to the {ordinal} monitor",
+    "move window to the {ordinal} monitor",
+    "send to the {ordinal} monitor",
+    category="window",
+    help_text="Move the focused window to a monitor by ordinal name",
+)
+def handle_move_focused_to_monitor_ordinal(context, ordinal):
+    n = _ORDINALS.get(ordinal.lower())
+    if n is None:
+        return f"Unknown monitor position '{ordinal}'"
+    return _move_to_monitor(None, str(n))

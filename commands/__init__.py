@@ -36,16 +36,16 @@ def init(
     _check_automation_health = check_health_fn
     _get_installed_gui_apps = get_installed_gui_apps_fn
 
-    from commands import (
+    from commands import (  # noqa: I001
         apps,
         audio,
         brightness,
         help,
         input,
         power,
-        search,
         settings,
         shortcuts,
+        search,
         system,
         vision,
         window,
@@ -77,6 +77,17 @@ class CommandRegistry:
     def match(self, text):
         text_clean = text.strip().rstrip(".!?,;")
         for entry in self.entries:
+            for pattern in entry["patterns"]:
+                result = parse(pattern, text_clean, case_sensitive=False)
+                if result:
+                    return entry, result.named
+        return None, {}
+
+    def match_category(self, text, category):
+        text_clean = text.strip().rstrip(".!?,;")
+        for entry in self.entries:
+            if entry["category"] != category:
+                continue
             for pattern in entry["patterns"]:
                 result = parse(pattern, text_clean, case_sensitive=False)
                 if result:

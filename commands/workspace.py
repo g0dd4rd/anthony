@@ -118,41 +118,52 @@ def handle_move_focused_to_workspace(context, index):
     return _move_window_to_workspace(target, index - 1)
 
 
-@step(
-    "move to next workspace",
-    "move window to next workspace",
-    "move to workspace right",
-    category="workspace",
-    help_text="Move the focused window to the next workspace",
-)
-def handle_move_to_next_workspace(context):
-    target = _get_focused_window()
-    if not target:
-        return "No focused window found"
+_DIRECTIONS = {"next": 1, "right": 1, "previous": -1, "left": -1}
+
+
+def _move_relative_workspace(target, direction):
+    """Move a window to the next or previous workspace."""
+    delta = _DIRECTIONS.get(direction.lower())
+    if delta is None:
+        return f"Unknown direction '{direction}'"
     current_ws = target.get("workspace", 0)
-    try:
-        ws_result = _mcp_client.call_tool("list_workspaces", {})
-        workspaces = json.loads(ws_result)
-        total = len(workspaces)
-    except Exception:
-        total = current_ws + 2
-    if current_ws >= total - 1:
-        return "Already on the last workspace"
-    return _move_window_to_workspace(target, current_ws + 1)
+    if delta > 0:
+        try:
+            ws_result = _mcp_client.call_tool("list_workspaces", {})
+            workspaces = json.loads(ws_result)
+            total = len(workspaces)
+        except Exception:
+            total = current_ws + 2
+        if current_ws >= total - 1:
+            return "Already on the last workspace"
+    else:
+        if current_ws <= 0:
+            return "Already on the first workspace"
+    return _move_window_to_workspace(target, current_ws + delta)
 
 
 @step(
-    "move to previous workspace",
-    "move window to previous workspace",
-    "move to workspace left",
+    "move {app} to {direction} workspace",
+    "move {app} to workspace {direction}",
     category="workspace",
-    help_text="Move the focused window to the previous workspace",
+    help_text="Move an application to the next or previous workspace",
 )
-def handle_move_to_previous_workspace(context):
+def handle_move_app_to_relative_workspace(context, app, direction):
+    target = _find_window(app)
+    if not target:
+        return f"No window found matching '{app}'"
+    return _move_relative_workspace(target, direction)
+
+
+@step(
+    "move to {direction} workspace",
+    "move window to {direction} workspace",
+    "move to workspace {direction}",
+    category="workspace",
+    help_text="Move the focused window to the next or previous workspace",
+)
+def handle_move_to_relative_workspace(context, direction):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    current_ws = target.get("workspace", 0)
-    if current_ws <= 0:
-        return "Already on the first workspace"
-    return _move_window_to_workspace(target, current_ws - 1)
+    return _move_relative_workspace(target, direction)
