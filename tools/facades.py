@@ -5,9 +5,9 @@ import time
 import requests
 import webcolors
 
-from utils import log_and_print
 import utils
-from voice_io import speak, listen_and_transcribe
+from utils import log_and_print
+from voice_io import listen_and_transcribe, speak
 
 # ----------------------------------------
 # Dependency injection (set via init())
@@ -17,7 +17,8 @@ _dialog_handler = None
 _smart_match_window = None
 _get_friendly_app_name = None
 
-LLAMA_VISION_URL = 'http://127.0.0.1:8081/v1/chat/completions'
+LLAMA_VISION_URL = "http://127.0.0.1:8081/v1/chat/completions"
+
 
 def init(mcp_client, dialog_handler, smart_match_fn, friendly_name_fn):
     global _mcp_client, _dialog_handler, _smart_match_window, _get_friendly_app_name
@@ -44,7 +45,7 @@ def _verify_window_state(window_id, expected):
         if result.startswith("Error"):
             return None, None
         windows = json.loads(result)
-        window = next((w for w in windows if w['id'] == window_id), None)
+        window = next((w for w in windows if w["id"] == window_id), None)
         if window is None:
             return False, None
         for key, value in expected.items():
@@ -57,34 +58,39 @@ def _verify_window_state(window_id, expected):
 
 def _call_vision(system_prompt, user_prompt, img_base64):
     payload = {
-        'messages': [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': [
-                {'type': 'text', 'text': user_prompt},
-                {'type': 'image_url', 'image_url': {
-                    'url': f'data:image/png;base64,{img_base64}'
-                }}
-            ]}
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{img_base64}"},
+                    },
+                ],
+            },
         ],
-        'temperature': 0.7,
-        'max_tokens': 800,
-        'chat_template_kwargs': {'enable_thinking': False},
+        "temperature": 0.7,
+        "max_tokens": 800,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     resp = requests.post(LLAMA_VISION_URL, json=payload, timeout=120)
     resp.raise_for_status()
-    return resp.json()['choices'][0]['message']['content']
+    return resp.json()["choices"][0]["message"]["content"]
+
 
 DIALOG_CHECK_SHORTCUTS = {
-    'Alt+F4',
-    'Ctrl+Q',
-    'Ctrl+W',
-    'Ctrl+Shift+W',
+    "Alt+F4",
+    "Ctrl+Q",
+    "Ctrl+W",
+    "Ctrl+Shift+W",
 }
 
 
 def _send_key_via_mcp(keys: str):
     """Send keyboard input via MCP client (for dialog handler callback)."""
-    if '+' in keys:
+    if "+" in keys:
         _mcp_client.call_tool("key_combo", {"keys": keys})
     else:
         _mcp_client.call_tool("key_press", {"key": keys})
@@ -126,8 +132,16 @@ def parse_position(position: str, screen_width: int = 1920, screen_height: int =
 # CONSOLIDATED FACADE TOOLS
 # ========================================
 
-def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
-                  width: int = 800, height: int = 600, include_frame: bool = True) -> str:
+
+def window_control(
+    action: str,
+    window_name: str = "",
+    x: int = 0,
+    y: int = 0,
+    width: int = 800,
+    height: int = 600,
+    include_frame: bool = True,
+) -> str:
     """Unified window management facade."""
     log_and_print(f"\n[WINDOW_CONTROL] Action: {action}, Window: {window_name or 'current'}")
 
@@ -139,17 +153,24 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
             windows = json.loads(result)
             if not windows:
                 return "No windows are currently open."
-            window_titles = [w.get('title', 'Untitled') for w in windows[:10]]
+            window_titles = [w.get("title", "Untitled") for w in windows[:10]]
             return f"Found {len(windows)} open windows: {', '.join(window_titles)}"
 
         if action == "screenshot_area":
-            result = _mcp_client.call_tool("screenshot_area", {
-                "x": x, "y": y, "width": width, "height": height,
-                "include_cursor": False, "format": "path"
-            })
+            result = _mcp_client.call_tool(
+                "screenshot_area",
+                {
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "include_cursor": False,
+                    "format": "path",
+                },
+            )
             if result.startswith("Error"):
                 return result
-            return f"Area screenshot saved to Screenshots."
+            return "Area screenshot saved to Screenshots."
 
         result = _mcp_client.call_tool("list_windows", {})
         if result.startswith("Error"):
@@ -160,8 +181,8 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
         if not target_window:
             return f"No window found matching '{window_name}'"
 
-        window_id = target_window['id']
-        wm_class = target_window.get('wmClass', 'Unknown')
+        window_id = target_window["id"]
+        wm_class = target_window.get("wmClass", "Unknown")
         friendly_name = _get_friendly_app_name(wm_class)
 
         if action == "focus":
@@ -174,7 +195,6 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
             return f"Focused {friendly_name}"
 
         elif action == "close":
-            window_title = target_window.get('title', 'Unknown')
             _mcp_client.call_tool("close_window", {"window_id": window_id})
 
             dialog = _dialog_handler.detect_save_dialog(app_name=None, timeout=3.0)
@@ -183,15 +203,17 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 result = _mcp_client.call_tool("list_windows", {})
                 if not result.startswith("Error"):
                     windows_after = json.loads(result)
-                    if not any(w['id'] == window_id for w in windows_after):
+                    if not any(w["id"] == window_id for w in windows_after):
                         return f"Successfully closed {friendly_name}"
 
                 dialog = _dialog_handler.detect_save_dialog(app_name=None, timeout=5.0)
                 if not dialog:
-                    return f"Window did not close. No dialog detected."
+                    return "Window did not close. No dialog detected."
 
-            buttons = dialog['info']['buttons']
-            button_list = ', '.join([btn['text'] for btn in buttons]) if buttons else "Save, Discard, Cancel"
+            buttons = dialog["info"]["buttons"]
+            button_list = (
+                ", ".join([btn["text"] for btn in buttons]) if buttons else "Save, Discard, Cancel"
+            )
             voice_prompt = f"The window has unsaved changes. Options: {button_list}. What would you like to do?"
 
             speak(voice_prompt)
@@ -202,7 +224,9 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 _mcp_client.call_tool("key_combo", {"keys": "Escape"})
                 return "Close operation canceled"
 
-            success = _dialog_handler.activate_button_by_keyboard(dialog, user_choice, key_callback=_send_key_via_mcp)
+            success = _dialog_handler.activate_button_by_keyboard(
+                dialog, user_choice, key_callback=_send_key_via_mcp
+            )
             if not success:
                 speak(f"Could not understand choice {user_choice}")
                 _mcp_client.call_tool("key_combo", {"keys": "Escape"})
@@ -214,7 +238,7 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 result = _mcp_client.call_tool("list_windows", {})
                 if not result.startswith("Error"):
                     windows_final = json.loads(result)
-                    window_still_open = any(w['id'] == window_id for w in windows_final)
+                    window_still_open = any(w["id"] == window_id for w in windows_final)
                     if window_still_open:
                         return f"Dialog closed. {friendly_name} is still open"
                     else:
@@ -233,7 +257,7 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
             return f"Minimized {friendly_name}"
 
         elif action == "maximize":
-            is_maximized = target_window.get('maximized', False)
+            is_maximized = target_window.get("maximized", False)
             if is_maximized:
                 _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
                 matched, _ = _verify_window_state(window_id, {"maximized": False})
@@ -252,28 +276,35 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
                 return f"Maximized {friendly_name}"
 
         elif action == "restore":
-            is_maximized = target_window.get('maximized', False)
+            is_maximized = target_window.get("maximized", False)
             _mcp_client.call_tool("unminimize_window", {"window_id": window_id})
             _mcp_client.call_tool("focus_window", {"window_id": window_id})
             if is_maximized:
                 _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
-            matched, actual = _verify_window_state(window_id, {"minimized": False, "maximized": False})
+            matched, actual = _verify_window_state(
+                window_id, {"minimized": False, "maximized": False}
+            )
             if matched is None:
                 return f"Restored {friendly_name}, but couldn't confirm"
             if not matched and actual:
                 issues = []
-                if actual.get('minimized'):
+                if actual.get("minimized"):
                     issues.append("still minimized")
-                if actual.get('maximized'):
+                if actual.get("maximized"):
                     issues.append("still maximized")
                 return f"Tried to restore {friendly_name} but it's {' and '.join(issues)}"
             return f"Restored {friendly_name}"
 
         elif action == "screenshot":
-            result = _mcp_client.call_tool("screenshot_window", {
-                "window_id": window_id, "include_frame": include_frame,
-                "include_cursor": False, "format": "path"
-            })
+            result = _mcp_client.call_tool(
+                "screenshot_window",
+                {
+                    "window_id": window_id,
+                    "include_frame": include_frame,
+                    "include_cursor": False,
+                    "format": "path",
+                },
+            )
             if result.startswith("Error"):
                 return result
             return f"Screenshot of {friendly_name} saved to Screenshots."
@@ -289,24 +320,30 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
 
             window_info = _mcp_client.call_tool("list_windows", {})
             windows = json.loads(window_info)
-            current_window = next((w for w in windows if w['id'] == window_id), None)
+            current_window = next((w for w in windows if w["id"] == window_id), None)
 
-            old_width = current_window.get('width', 0) if current_window else 0
-            old_height = current_window.get('height', 0) if current_window else 0
-            old_x = current_window.get('x', 0) if current_window else 0
-            old_y = current_window.get('y', 0) if current_window else 0
+            old_width = current_window.get("width", 0) if current_window else 0
+            old_height = current_window.get("height", 0) if current_window else 0
+            old_x = current_window.get("x", 0) if current_window else 0
+            old_y = current_window.get("y", 0) if current_window else 0
 
-            _mcp_client.call_tool("move_resize_window", {
-                "window_id": window_id, "x": x_int, "y": y_int,
-                "width": width_int, "height": height_int
-            })
+            _mcp_client.call_tool(
+                "move_resize_window",
+                {
+                    "window_id": window_id,
+                    "x": x_int,
+                    "y": y_int,
+                    "width": width_int,
+                    "height": height_int,
+                },
+            )
 
             _, actual = _verify_window_state(window_id, {})
             if actual:
-                actual_x = actual.get('x', old_x)
-                actual_y = actual.get('y', old_y)
-                actual_w = actual.get('width', old_width)
-                actual_h = actual.get('height', old_height)
+                actual_x = actual.get("x", old_x)
+                actual_y = actual.get("y", old_y)
+                actual_w = actual.get("width", old_width)
+                actual_h = actual.get("height", old_height)
             else:
                 actual_x, actual_y, actual_w, actual_h = x_int, y_int, width_int, height_int
 
@@ -350,10 +387,20 @@ def window_control(action: str, window_name: str = "", x: int = 0, y: int = 0,
         return f"Error in window_control: {str(e)}"
 
 
-def input_control(action: str, text: str = "", keys: str = "",
-                 x: int = 0, y: int = 0, to_x: int = 0, to_y: int = 0,
-                 direction: str = "down", amount: int = 1, button: int = 1,
-                 from_position: str = "center", to_position: str = "center") -> str:
+def input_control(
+    action: str,
+    text: str = "",
+    keys: str = "",
+    x: int = 0,
+    y: int = 0,
+    to_x: int = 0,
+    to_y: int = 0,
+    direction: str = "down",
+    amount: int = 1,
+    button: int = 1,
+    from_position: str = "center",
+    to_position: str = "center",
+) -> str:
     """Unified input control facade."""
     log_and_print(f"\n[INPUT_CONTROL] Action: {action}")
 
@@ -374,8 +421,12 @@ def input_control(action: str, text: str = "", keys: str = "",
                 dialog = _dialog_handler.detect_save_dialog(app_name=None, timeout=3.0)
 
                 if dialog:
-                    buttons = dialog['info']['buttons']
-                    button_list = ', '.join([btn['text'] for btn in buttons]) if buttons else "Save, Discard, Cancel"
+                    buttons = dialog["info"]["buttons"]
+                    button_list = (
+                        ", ".join([btn["text"] for btn in buttons])
+                        if buttons
+                        else "Save, Discard, Cancel"
+                    )
                     voice_prompt = f"The window has unsaved changes. Options: {button_list}. What would you like to do?"
 
                     speak(voice_prompt)
@@ -386,7 +437,9 @@ def input_control(action: str, text: str = "", keys: str = "",
                         _mcp_client.call_tool("key_combo", {"keys": "Escape"})
                         return f"Pressed {normalized} but close operation was canceled (no response to dialog)"
 
-                    success = _dialog_handler.activate_button_by_keyboard(dialog, user_choice, key_callback=_send_key_via_mcp)
+                    success = _dialog_handler.activate_button_by_keyboard(
+                        dialog, user_choice, key_callback=_send_key_via_mcp
+                    )
                     if not success:
                         speak(f"Could not understand choice {user_choice}")
                         _mcp_client.call_tool("key_combo", {"keys": "Escape"})
@@ -419,17 +472,15 @@ def input_control(action: str, text: str = "", keys: str = "",
                 x, y = from_coords
                 to_x, to_y = to_coords
 
-            _mcp_client.call_tool("mouse_drag", {
-                "x1": x, "y1": y, "x2": to_x, "y2": to_y, "button": button
-            })
+            _mcp_client.call_tool(
+                "mouse_drag", {"x1": x, "y1": y, "x2": to_x, "y2": to_y, "button": button}
+            )
             return f"Dragged from ({x}, {y}) to ({to_x}, {to_y})"
 
         elif action == "scroll":
             is_down = "down" in direction.lower()
             dy = 100 * amount if is_down else -100 * amount
-            result = _mcp_client.call_tool("mouse_scroll", {
-                "x": 960, "y": 540, "dx": 0, "dy": dy
-            })
+            result = _mcp_client.call_tool("mouse_scroll", {"x": 960, "y": 540, "dx": 0, "dy": dy})
 
             if not result.startswith("Error"):
                 return f"Scrolled {direction}"
@@ -459,13 +510,13 @@ def audio_control(action: str, level: int = 0, relative: bool = False) -> str:
                 status = json.loads(_mcp_client.call_tool("get_volume", {}))
                 return f"Volume set to {status['volume']}%"
             except Exception:
-                return f"Volume adjusted, but couldn't confirm"
+                return "Volume adjusted, but couldn't confirm"
 
         elif action == "mute":
             _mcp_client.call_tool("mute_volume", {"mute": True})
             try:
                 status = json.loads(_mcp_client.call_tool("get_volume", {}))
-                if status.get('muted'):
+                if status.get("muted"):
                     return "Muted"
                 return "Tried to mute but audio is still unmuted"
             except Exception:
@@ -475,7 +526,7 @@ def audio_control(action: str, level: int = 0, relative: bool = False) -> str:
             _mcp_client.call_tool("mute_volume", {"mute": False})
             try:
                 status = json.loads(_mcp_client.call_tool("get_volume", {}))
-                if not status.get('muted'):
+                if not status.get("muted"):
                     return "Unmuted"
                 return "Tried to unmute but audio is still muted"
             except Exception:
@@ -488,8 +539,8 @@ def audio_control(action: str, level: int = 0, relative: bool = False) -> str:
                 status = json.loads(_mcp_client.call_tool("get_media_status", {}))
                 if "error" in status:
                     return "No media player found"
-                title = status.get('title', '')
-                player_status = status.get('status', '')
+                title = status.get("title", "")
+                player_status = status.get("status", "")
                 if action in ("play", "play_pause") and title:
                     return f"Playing {title}" if player_status == "Playing" else f"Paused {title}"
                 elif action == "pause" and title:
@@ -502,8 +553,14 @@ def audio_control(action: str, level: int = 0, relative: bool = False) -> str:
                     return "Stopped playback"
                 return f"{player_status}" if player_status else "Toggled playback"
             except Exception:
-                labels = {"play": "Playing", "pause": "Paused", "play_pause": "Toggled playback",
-                          "next": "Next track", "previous": "Previous track", "stop": "Stopped"}
+                labels = {
+                    "play": "Playing",
+                    "pause": "Paused",
+                    "play_pause": "Toggled playback",
+                    "next": "Next track",
+                    "previous": "Previous track",
+                    "stop": "Stopped",
+                }
                 return f"{labels.get(action, 'Done')}, but couldn't confirm"
 
         else:
@@ -525,7 +582,7 @@ def system_settings(action: str, state: str = "toggle", path: str = "") -> str:
             "night_light": "night_light",
             "do_not_disturb": "do_not_disturb",
             "wifi": "wifi",
-            "bluetooth": "bluetooth"
+            "bluetooth": "bluetooth",
         }
 
         setting_name = setting_map.get(action)
@@ -539,7 +596,9 @@ def system_settings(action: str, state: str = "toggle", path: str = "") -> str:
         else:
             return "Please specify 'on' or 'off' for this setting"
 
-        return _mcp_client.call_tool("quick_settings", {"setting": setting_name, "enabled": enabled})
+        return _mcp_client.call_tool(
+            "quick_settings", {"setting": setting_name, "enabled": enabled}
+        )
     except Exception as e:
         return f"Error in system_settings: {str(e)}"
 
@@ -551,25 +610,30 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
 
     try:
         if action == "screenshot":
-            result = _mcp_client.call_tool("screenshot", {"include_cursor": False, "format": "path"})
+            result = _mcp_client.call_tool(
+                "screenshot", {"include_cursor": False, "format": "path"}
+            )
             if result.startswith("Error"):
                 return result
-            return f"Screenshot saved to Screenshots."
+            return "Screenshot saved to Screenshots."
 
         elif action == "describe":
-            result = _mcp_client.call_tool("screenshot", {"include_cursor": False, "format": "path"})
+            result = _mcp_client.call_tool(
+                "screenshot", {"include_cursor": False, "format": "path"}
+            )
             if result.startswith("Error"):
                 return result
 
             screenshot_path = result.strip()
-            with open(screenshot_path, 'rb') as img_file:
+            with open(screenshot_path, "rb") as img_file:
                 import base64
-                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+
+                img_data = base64.b64encode(img_file.read()).decode("utf-8")
 
             description = _call_vision(
-                'You are a screen reader for visually impaired users. Describe what you see in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.',
-                'What applications and windows are visible on this desktop screenshot?',
-                img_data
+                "You are a screen reader for visually impaired users. Describe what you see in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.",
+                "What applications and windows are visible on this desktop screenshot?",
+                img_data,
             )
 
             try:
@@ -581,9 +645,12 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
         elif action == "describe_file":
             file_path = os.path.expanduser(path)
             if not os.path.isfile(file_path):
-                log_and_print(f"[VISION_CONTROL] Exact path not found, searching via localsearch...")
+                log_and_print("[VISION_CONTROL] Exact path not found, searching via localsearch...")
                 try:
-                    search_result = _mcp_client.call_tool("search_files", {"query": os.path.basename(path), "file_type": "files", "limit": 5})
+                    search_result = _mcp_client.call_tool(
+                        "search_files",
+                        {"query": os.path.basename(path), "file_type": "files", "limit": 5},
+                    )
                     results = json.loads(search_result)
                     if results.get("count", 0) > 0:
                         file_path = results["results"][0]
@@ -593,14 +660,15 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
                 except Exception:
                     return f"File not found: {path}"
 
-            with open(file_path, 'rb') as img_file:
+            with open(file_path, "rb") as img_file:
                 import base64
-                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+
+                img_data = base64.b64encode(img_file.read()).decode("utf-8")
 
             description = _call_vision(
-                'Describe the image in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.',
-                f'Describe this image: {os.path.basename(file_path)}',
-                img_data
+                "Describe the image in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly without explaining your reasoning process.",
+                f"Describe this image: {os.path.basename(file_path)}",
+                img_data,
             )
             return description
 
@@ -609,28 +677,34 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
             if result.startswith("Error"):
                 return result
             windows = json.loads(result)
-            focused = next((w for w in windows if w.get('focused', False)), None)
+            focused = next((w for w in windows if w.get("focused", False)), None)
             if not focused:
                 return "No focused window found."
-            window_id = focused['id']
-            friendly_name = _get_friendly_app_name(focused.get('wmClass', ''))
+            window_id = focused["id"]
+            friendly_name = _get_friendly_app_name(focused.get("wmClass", ""))
 
-            result = _mcp_client.call_tool("screenshot_window", {
-                "window_id": window_id, "include_frame": False,
-                "include_cursor": False, "format": "path"
-            })
+            result = _mcp_client.call_tool(
+                "screenshot_window",
+                {
+                    "window_id": window_id,
+                    "include_frame": False,
+                    "include_cursor": False,
+                    "format": "path",
+                },
+            )
             if result.startswith("Error"):
                 return result
 
             screenshot_path = result.strip()
-            with open(screenshot_path, 'rb') as img_file:
+            with open(screenshot_path, "rb") as img_file:
                 import base64
-                img_data = base64.b64encode(img_file.read()).decode('utf-8')
+
+                img_data = base64.b64encode(img_file.read()).decode("utf-8")
 
             description = _call_vision(
-                'Describe what you see in this application window in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly.',
-                f'Describe the content shown in this {friendly_name} window.',
-                img_data
+                "Describe what you see in this application window in plain text without any formatting. Do not use markdown, asterisks, or special characters. Answer directly.",
+                f"Describe the content shown in this {friendly_name} window.",
+                img_data,
             )
 
             try:
@@ -640,28 +714,40 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
             return description
 
         elif action == "pick_color":
-            log_and_print(f"[DEBUG] vision_control received coordinates: x={x}, y={y}, types: x={type(x)}, y={type(y)}", level='debug', console=DEBUG)
+            log_and_print(
+                f"[DEBUG] vision_control received coordinates: x={x}, y={y}, types: x={type(x)}, y={type(y)}",
+                level="debug",
+                console=DEBUG,
+            )
             result = _mcp_client.call_tool("pick_color", {"x": x, "y": y})
-            log_and_print(f"[DEBUG] pick_color result: {result}", level='debug', console=DEBUG)
+            log_and_print(f"[DEBUG] pick_color result: {result}", level="debug", console=DEBUG)
 
             try:
                 rgb_data = json.loads(result)
-                r, g, b = int(rgb_data['r']), int(rgb_data['g']), int(rgb_data['b'])
+                r, g, b = int(rgb_data["r"]), int(rgb_data["g"]), int(rgb_data["b"])
                 try:
-                    color_name = webcolors.rgb_to_name((r, g, b), spec='css3')
+                    color_name = webcolors.rgb_to_name((r, g, b), spec="css3")
                 except ValueError:
-                    min_distance = float('inf')
+                    min_distance = float("inf")
                     closest_name = None
-                    for name in webcolors.names('css3'):
+                    for name in webcolors.names("css3"):
                         named_rgb = webcolors.name_to_rgb(name)
-                        distance = sum((a - b_val) ** 2 for a, b_val in zip((r, g, b), named_rgb)) ** 0.5
+                        distance = (
+                            sum(
+                                (a - b_val) ** 2
+                                for a, b_val in zip((r, g, b), named_rgb, strict=False)
+                            )
+                            ** 0.5
+                        )
                         if distance < min_distance:
                             min_distance = distance
                             closest_name = name
                     color_name = closest_name
                 return f"{color_name} (RGB: {r}, {g}, {b})"
             except Exception as e:
-                log_and_print(f"[DEBUG] Color name conversion failed: {e}", level='debug', console=DEBUG)
+                log_and_print(
+                    f"[DEBUG] Color name conversion failed: {e}", level="debug", console=DEBUG
+                )
                 return result
 
         elif action == "get_monitors":
@@ -672,16 +758,20 @@ def vision_control(action: str, x: int = 0, y: int = 0, path: str = "") -> str:
                     return "No monitors detected"
                 elif len(monitors) == 1:
                     m = monitors[0]
-                    primary_tag = " (primary)" if m.get('primary') else ""
+                    primary_tag = " (primary)" if m.get("primary") else ""
                     return f"1 {primary_tag} monitor, resolution {m['width']}x{m['height']} at scale {m.get('scale', 1)}"
                 else:
                     lines = [f"{len(monitors)} monitors connected:"]
                     for i, m in enumerate(monitors):
-                        primary_tag = " (primary)" if m.get('primary') else ""
-                        lines.append(f"Monitor {i+1}{primary_tag}, resolution {m['width']}x{m['height']} at position ({m['x']}, {m['y']})")
+                        primary_tag = " (primary)" if m.get("primary") else ""
+                        lines.append(
+                            f"Monitor {i + 1}{primary_tag}, resolution {m['width']}x{m['height']} at position ({m['x']}, {m['y']})"
+                        )
                     return " ".join(lines)
             except Exception as e:
-                log_and_print(f"[DEBUG] Monitor formatting failed: {e}", level='debug', console=DEBUG)
+                log_and_print(
+                    f"[DEBUG] Monitor formatting failed: {e}", level="debug", console=DEBUG
+                )
                 return result
 
         else:
@@ -706,8 +796,8 @@ def workspace_control(action: str, index: int = 0) -> str:
                     return "No workspaces found"
                 active_workspace = None
                 for ws in workspaces:
-                    if ws.get('active', False):
-                        active_workspace = ws.get('index', 0)
+                    if ws.get("active", False):
+                        active_workspace = ws.get("index", 0)
                         break
                 total = len(workspaces)
                 return f"You have {total} workspace{'s' if total > 1 else ''}. You are on workspace {active_workspace + 1}."
@@ -721,8 +811,8 @@ def workspace_control(action: str, index: int = 0) -> str:
             try:
                 ws_result = _mcp_client.call_tool("list_workspaces", {})
                 workspaces = json.loads(ws_result)
-                active = next((ws for ws in workspaces if ws.get('active')), None)
-                if active and active.get('index') == index:
+                active = next((ws for ws in workspaces if ws.get("active")), None)
+                if active and active.get("index") == index:
                     return f"Switched to workspace {index + 1}"
                 elif active:
                     return f"Tried to switch to workspace {index + 1} but you're on workspace {active['index'] + 1}"

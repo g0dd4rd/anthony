@@ -14,8 +14,16 @@ _check_automation_health = None
 _get_installed_gui_apps = None
 
 
-def init(mcp_client, speak_fn, listen_fn, smart_match_fn, friendly_name_fn,
-         dialog_handler, check_health_fn, get_installed_gui_apps_fn):
+def init(
+    mcp_client,
+    speak_fn,
+    listen_fn,
+    smart_match_fn,
+    friendly_name_fn,
+    dialog_handler,
+    check_health_fn,
+    get_installed_gui_apps_fn,
+):
     global _mcp_client, _speak, _listen, _smart_match_window
     global _get_friendly_app_name, _dialog_handler
     global _check_automation_health, _get_installed_gui_apps
@@ -28,34 +36,48 @@ def init(mcp_client, speak_fn, listen_fn, smart_match_fn, friendly_name_fn,
     _check_automation_health = check_health_fn
     _get_installed_gui_apps = get_installed_gui_apps_fn
 
-    from commands import (audio, shortcuts, search, workspace, window, input,
-                          settings, vision, system, power, brightness, apps,
-                          help)
+    from commands import (
+        apps,
+        audio,
+        brightness,
+        help,
+        input,
+        power,
+        search,
+        settings,
+        shortcuts,
+        system,
+        vision,
+        window,
+        workspace,
+    )
 
 
 class CommandRegistry:
     def __init__(self):
         self.entries = []
 
-    def step(self, *patterns, category, help_text='',
-             requires_confirmation=False, uses_llm=False):
+    def step(self, *patterns, category, help_text="", requires_confirmation=False, uses_llm=False):
         def decorator(fn):
-            self.entries.append({
-                'patterns': patterns,
-                'handler': fn,
-                'name': fn.__name__,
-                'category': category,
-                'help_text': help_text,
-                'requires_confirmation': requires_confirmation,
-                'uses_llm': uses_llm,
-            })
+            self.entries.append(
+                {
+                    "patterns": patterns,
+                    "handler": fn,
+                    "name": fn.__name__,
+                    "category": category,
+                    "help_text": help_text,
+                    "requires_confirmation": requires_confirmation,
+                    "uses_llm": uses_llm,
+                }
+            )
             return fn
+
         return decorator
 
     def match(self, text):
-        text_clean = text.strip().rstrip('.!?,;')
+        text_clean = text.strip().rstrip(".!?,;")
         for entry in self.entries:
-            for pattern in entry['patterns']:
+            for pattern in entry["patterns"]:
                 result = parse(pattern, text_clean, case_sensitive=False)
                 if result:
                     return entry, result.named
@@ -64,7 +86,7 @@ class CommandRegistry:
     def get_categories(self):
         categories = {}
         for entry in self.entries:
-            cat = entry['category']
+            cat = entry["category"]
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append(entry)

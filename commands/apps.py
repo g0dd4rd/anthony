@@ -1,13 +1,20 @@
-import os
-import re
 import subprocess
 
-from commands import step, _mcp_client, _speak, _listen
+from commands import _listen, _speak, step
 from utils import log_and_print
 
-_CONFIRM_WORDS = ('yes', 'yeah', 'yep', 'sure', 'do it', 'confirm', 'go ahead')
-_CANCEL_WORDS = ('cancel', 'skip', 'nevermind', 'never mind', 'no', 'nope',
-                 'stop', 'forget it', 'none')
+_CONFIRM_WORDS = ("yes", "yeah", "yep", "sure", "do it", "confirm", "go ahead")
+_CANCEL_WORDS = (
+    "cancel",
+    "skip",
+    "nevermind",
+    "never mind",
+    "no",
+    "nope",
+    "stop",
+    "forget it",
+    "none",
+)
 
 
 def _search_apps(query):
@@ -20,7 +27,9 @@ def _search_apps(query):
         try:
             fp = subprocess.run(
                 ["flatpak", "search", "--columns=name,application,remotes", fp_query],
-                capture_output=True, text=True, timeout=15
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if fp.returncode == 0 and fp.stdout.strip():
                 found_any = False
@@ -40,13 +49,10 @@ def _search_apps(query):
         except FileNotFoundError:
             break
         except Exception as e:
-            log_and_print(f"[SYSTEM] flatpak search error: {e}", level='warning')
+            log_and_print(f"[SYSTEM] flatpak search error: {e}", level="warning")
             break
     try:
-        dnf = subprocess.run(
-            ["dnf", "search", query],
-            capture_output=True, text=True, timeout=15
-        )
+        dnf = subprocess.run(["dnf", "search", query], capture_output=True, text=True, timeout=15)
         if dnf.returncode == 0 and dnf.stdout.strip():
             for line in dnf.stdout.strip().split("\n"):
                 if len(results) >= 5:
@@ -60,7 +66,7 @@ def _search_apps(query):
     except FileNotFoundError:
         pass
     except Exception as e:
-        log_and_print(f"[SYSTEM] dnf search error: {e}", level='warning')
+        log_and_print(f"[SYSTEM] dnf search error: {e}", level="warning")
     return results
 
 
@@ -73,11 +79,16 @@ def _run_install(app_id, source):
                 cmd.append(source)
             cmd.append(app_id)
         else:
-            has_sudo = subprocess.run(
-                ["sudo", "-n", "true"], capture_output=True, timeout=5
-            ).returncode == 0
+            has_sudo = (
+                subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5).returncode
+                == 0
+            )
             if not has_sudo:
-                return "Installing RPM packages requires sudo. Please type your sudo password in the terminal, then try again."
+                return (
+                    "Installing RPM packages requires sudo."
+                    " Please type your sudo password in"
+                    " the terminal, then try again."
+                )
             cmd = ["sudo", "dnf", "install", "-y", app_id]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if result.returncode == 0:
@@ -98,11 +109,16 @@ def _run_uninstall(app_id, source):
         if is_flatpak:
             cmd = ["flatpak", "uninstall", "-y", app_id]
         else:
-            has_sudo = subprocess.run(
-                ["sudo", "-n", "true"], capture_output=True, timeout=5
-            ).returncode == 0
+            has_sudo = (
+                subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5).returncode
+                == 0
+            )
             if not has_sudo:
-                return "Uninstalling RPM packages requires sudo. Please type your sudo password in the terminal, then try again."
+                return (
+                    "Uninstalling RPM packages requires sudo."
+                    " Please type your sudo password in"
+                    " the terminal, then try again."
+                )
             cmd = ["sudo", "dnf", "remove", "-y", app_id]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
@@ -117,16 +133,21 @@ def _confirm_and_install(name, app_id, source, is_uninstall):
     _speak(f"Found {name}. Should I {action_word} it?")
     confirmation = _listen()
     if confirmation and any(w in confirmation.lower() for w in _CONFIRM_WORDS):
-        _speak(f"{'Uninstalling' if is_uninstall else 'Installing'} {name}. This may take a moment.")
+        _speak(
+            f"{'Uninstalling' if is_uninstall else 'Installing'} {name}. This may take a moment."
+        )
         if is_uninstall:
             return _run_uninstall(app_id, source)
         return _run_install(app_id, source)
     return "Canceled."
 
 
-@step('install {query}',
-      category='apps', requires_confirmation=True,
-      help_text='Install an application (searches Flatpak and DNF)')
+@step(
+    "install {query}",
+    category="apps",
+    requires_confirmation=True,
+    help_text="Install an application (searches Flatpak and DNF)",
+)
 def handle_install(context, query):
     _speak(f"Searching for {query}.")
     results = _search_apps(query)
@@ -151,17 +172,27 @@ def handle_install(context, query):
     if any(w in choice.lower() for w in _CANCEL_WORDS):
         return "Canceled."
 
-    choice_lower = choice.lower().strip().strip('.,!').strip()
-    matched = next(((n, a, s) for n, a, s in results
-                    if n.lower() in choice_lower or choice_lower in n.lower()), None)
+    choice_lower = choice.lower().strip().strip(".,!").strip()
+    matched = next(
+        (
+            (n, a, s)
+            for n, a, s in results
+            if n.lower() in choice_lower or choice_lower in n.lower()
+        ),
+        None,
+    )
     if matched:
         return _confirm_and_install(*matched, False)
     return f"Could not find {choice} in the results. Canceled."
 
 
-@step('uninstall {query}', 'remove app {query}',
-      category='apps', requires_confirmation=True,
-      help_text='Uninstall an application')
+@step(
+    "uninstall {query}",
+    "remove app {query}",
+    category="apps",
+    requires_confirmation=True,
+    help_text="Uninstall an application",
+)
 def handle_uninstall(context, query):
     _speak(f"Searching for {query}.")
     results = _search_apps(query)
@@ -186,9 +217,15 @@ def handle_uninstall(context, query):
     if any(w in choice.lower() for w in _CANCEL_WORDS):
         return "Canceled."
 
-    choice_lower = choice.lower().strip().strip('.,!').strip()
-    matched = next(((n, a, s) for n, a, s in results
-                    if n.lower() in choice_lower or choice_lower in n.lower()), None)
+    choice_lower = choice.lower().strip().strip(".,!").strip()
+    matched = next(
+        (
+            (n, a, s)
+            for n, a, s in results
+            if n.lower() in choice_lower or choice_lower in n.lower()
+        ),
+        None,
+    )
     if matched:
         return _confirm_and_install(*matched, True)
     return f"Could not find {choice} in the results. Canceled."
@@ -196,19 +233,27 @@ def handle_uninstall(context, query):
 
 # --- App shortcuts query ---
 
-@step('shortcuts for {app}', 'what are the shortcuts for {app}',
-      'keyboard shortcuts for {app}', 'shortcut for {app}',
-      "how do I save in {app}",
-      'what shortcuts does {app} have', '{app} shortcuts',
-      'show shortcuts for {app}',
-      category='apps', help_text='Look up keyboard shortcuts for an application')
+
+@step(
+    "shortcuts for {app}",
+    "what are the shortcuts for {app}",
+    "keyboard shortcuts for {app}",
+    "shortcut for {app}",
+    "how do I save in {app}",
+    "what shortcuts does {app} have",
+    "{app} shortcuts",
+    "show shortcuts for {app}",
+    category="apps",
+    help_text="Look up keyboard shortcuts for an application",
+)
 def handle_shortcuts(context, app):
     from tools.standalone import get_app_shortcuts
+
     shortcut_info = get_app_shortcuts(app)
     if shortcut_info.startswith("No shortcuts"):
         return shortcut_info
 
     shortcuts_only = shortcut_info.split("\nSkills (")[0]
     lines = shortcuts_only.splitlines()
-    shortcuts = [l.lstrip('- ').strip() for l in lines if l.startswith('- ')]
+    shortcuts = [ln.lstrip("- ").strip() for ln in lines if ln.startswith("- ")]
     return f"Shortcuts for {app}: " + ", ".join(shortcuts)

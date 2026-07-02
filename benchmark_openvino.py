@@ -11,7 +11,6 @@ import openvino
 from optimum.intel import OVModelForCausalLM
 from transformers import AutoTokenizer
 
-
 DEFAULT_MODEL = "/home/jprajzne/models/qwen3-30b-a3b-int4-ov"
 
 PROMPTS = [
@@ -87,10 +86,15 @@ def run_prompt(model, tokenizer, prompt, max_new_tokens):
 def main():
     parser = argparse.ArgumentParser(description="Benchmark an OpenVINO model")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Path to OpenVINO model directory")
-    parser.add_argument("--device", default="CPU",
-                        help="OpenVINO device (CPU recommended — GPU is integrated and shares system RAM)")
+    parser.add_argument(
+        "--device",
+        default="CPU",
+        help="OpenVINO device (CPU recommended — GPU is integrated and shares system RAM)",
+    )
     parser.add_argument("--max-tokens", type=int, default=128, help="Max new tokens per prompt")
-    parser.add_argument("--prompt", action="append", help="Custom prompt (repeatable, overrides defaults)")
+    parser.add_argument(
+        "--prompt", action="append", help="Custom prompt (repeatable, overrides defaults)"
+    )
     args = parser.parse_args()
 
     prompts = args.prompt if args.prompt else PROMPTS
@@ -111,8 +115,10 @@ def main():
             result = run_prompt(model, tokenizer, prompt, args.max_tokens)
             results.append(result)
             print(f"A: {result['response'][:200]}{'...' if len(result['response']) > 200 else ''}")
-            print(f"   {result['input_tokens']} in / {result['output_tokens']} out | "
-                  f"{result['elapsed']:.2f}s | {result['tokens_per_sec']:.1f} tok/s")
+            print(
+                f"   {result['input_tokens']} in / {result['output_tokens']} out | "
+                f"{result['elapsed']:.2f}s | {result['tokens_per_sec']:.1f} tok/s"
+            )
     finally:
         print()
         unload_model(model, tokenizer)

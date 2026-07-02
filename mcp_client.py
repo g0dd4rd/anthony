@@ -3,8 +3,8 @@
 Simple MCP client for testing anthony-mcp tools
 """
 
-import os
 import asyncio
+import os
 import threading
 import time
 from queue import Queue
@@ -47,9 +47,7 @@ class MCPClient:
     async def _connect_and_process(self):
         """Connect to MCP server and process commands"""
         server_params = StdioServerParameters(
-            command=self.server_command,
-            args=[],
-            env=os.environ.copy()
+            command=self.server_command, args=[], env=os.environ.copy()
         )
 
         async with stdio_client(server_params) as (read, write):

@@ -1,6 +1,5 @@
-import subprocess
 import re
-
+import subprocess
 
 GSETTINGS_SCHEMAS = {
     "gnome-wm": "org.gnome.desktop.wm.keybindings",
@@ -29,8 +28,8 @@ def _normalize_shortcut(raw: str) -> str:
     if not raw:
         return ""
 
-    parts = re.findall(r'<([^>]+)>', raw)
-    key = re.sub(r'<[^>]+>', '', raw).strip()
+    parts = re.findall(r"<([^>]+)>", raw)
+    key = re.sub(r"<[^>]+>", "", raw).strip()
 
     modifiers = []
     for p in parts:
@@ -65,8 +64,7 @@ def get_gsettings_shortcuts(schema_key: str) -> dict:
 
     try:
         result = subprocess.run(
-            ["gsettings", "list-recursively", schema],
-            capture_output=True, text=True, timeout=5
+            ["gsettings", "list-recursively", schema], capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
             return {}

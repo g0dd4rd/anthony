@@ -16,10 +16,10 @@ import sys
 import time
 
 import gi
-gi.require_version('Gio', '2.0')
-from gi.repository import Gio
 
+gi.require_version("Gio", "2.0")
 from dogtail.tree import root
+from gi.repository import Gio
 
 
 def get_running_atspi_names():
@@ -54,17 +54,19 @@ def discover():
             continue
         exec_name = os.path.basename(exec_path)
         display_name = gio_app.get_display_name() or exec_name
-        apps.append({
-            'exec': exec_name,
-            'exec_path': exec_path,
-            'name': display_name,
-        })
+        apps.append(
+            {
+                "exec": exec_name,
+                "exec_path": exec_path,
+                "name": display_name,
+            }
+        )
 
     seen_execs = set()
     unique_apps = []
     for app in apps:
-        if app['exec'] not in seen_execs:
-            seen_execs.add(app['exec'])
+        if app["exec"] not in seen_execs:
+            seen_execs.add(app["exec"])
             unique_apps.append(app)
 
     print(f"Found {len(unique_apps)} unique GUI apps to discover")
@@ -74,14 +76,14 @@ def discover():
     print(f"Currently running AT-SPI apps: {before_all}")
 
     for i, app in enumerate(unique_apps):
-        exec_name = app['exec']
-        exec_path = app['exec_path']
-        display_name = app['name']
+        exec_name = app["exec"]
+        exec_path = app["exec_path"]
+        display_name = app["name"]
 
         if exec_name in mapping:
             continue
 
-        print(f"\n[{i+1}/{len(unique_apps)}] {display_name} ({exec_name})")
+        print(f"\n[{i + 1}/{len(unique_apps)}] {display_name} ({exec_name})")
 
         before = get_running_atspi_names()
 
@@ -100,7 +102,7 @@ def discover():
         new_apps = after - before
 
         if not new_apps:
-            print(f"  SKIP: No new AT-SPI entry appeared")
+            print("  SKIP: No new AT-SPI entry appeared")
             kill_pid(proc.pid)
             time.sleep(1)
             continue
@@ -108,10 +110,10 @@ def discover():
         if len(new_apps) == 1:
             atspi_name = new_apps.pop()
         else:
-            exec_lower = exec_name.lower().replace('-', '').replace('_', '')
+            exec_lower = exec_name.lower().replace("-", "").replace("_", "")
             best = None
             for name in new_apps:
-                name_lower = name.lower().replace('-', '').replace('_', '').replace('.', '')
+                name_lower = name.lower().replace("-", "").replace("_", "").replace(".", "")
                 if exec_lower in name_lower or name_lower in exec_lower:
                     best = name
                     break
@@ -128,58 +130,58 @@ def discover():
 
 
 def write_to_aliases(mapping):
-    aliases_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'aliases.py')
+    aliases_path = os.path.join(os.path.dirname(__file__), "..", "config", "aliases.py")
     aliases_path = os.path.abspath(aliases_path)
 
-    with open(aliases_path, 'r') as f:
+    with open(aliases_path) as f:
         content = f.read()
 
-    marker = '# exec_name -> AT-SPI accessibility name'
+    marker = "# exec_name -> AT-SPI accessibility name"
     if marker in content:
         start = content.index(marker)
         # Find the closing brace of the existing dict
         brace_depth = 0
-        idx = content.index('{', start)
+        idx = content.index("{", start)
         for j in range(idx, len(content)):
-            if content[j] == '{':
+            if content[j] == "{":
                 brace_depth += 1
-            elif content[j] == '}':
+            elif content[j] == "}":
                 brace_depth -= 1
                 if brace_depth == 0:
                     end = j + 1
                     break
         # Remove old block including the marker line
-        line_start = content.rfind('\n', 0, start)
+        line_start = content.rfind("\n", 0, start)
         if line_start == -1:
             line_start = 0
-        content = content[:line_start].rstrip('\n') + '\n' + content[end:].lstrip('\n')
+        content = content[:line_start].rstrip("\n") + "\n" + content[end:].lstrip("\n")
 
-    lines = [f'\n\n{marker}']
-    lines.append('# (discovered by tools/discover_a11y.py)')
-    lines.append('APP_A11Y_NAMES = {')
+    lines = [f"\n\n{marker}"]
+    lines.append("# (discovered by tools/discover_a11y.py)")
+    lines.append("APP_A11Y_NAMES = {")
     for exec_name in sorted(mapping):
         atspi_name = mapping[exec_name]
         lines.append(f'    "{exec_name}": "{atspi_name}",')
-    lines.append('}')
+    lines.append("}")
 
-    content = content.rstrip('\n') + '\n' + '\n'.join(lines) + '\n'
+    content = content.rstrip("\n") + "\n" + "\n".join(lines) + "\n"
 
-    with open(aliases_path, 'w') as f:
+    with open(aliases_path, "w") as f:
         f.write(content)
 
     print(f"\nWrote {len(mapping)} entries to {aliases_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("AT-SPI Name Discovery")
     print("=" * 60)
     print("This will launch and close each GUI app to discover its")
     print("AT-SPI accessibility name. This may take several minutes.")
     print()
 
-    if '--yes' not in sys.argv:
+    if "--yes" not in sys.argv:
         answer = input("Continue? [y/N] ").strip().lower()
-        if answer != 'y':
+        if answer != "y":
             print("Aborted.")
             sys.exit(0)
 

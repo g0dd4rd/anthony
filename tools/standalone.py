@@ -2,8 +2,8 @@ import os
 import re
 import subprocess
 
-from utils import log_and_print
 from config.aliases import APP_SHORTCUT_ALIASES
+from utils import log_and_print
 
 # ----------------------------------------
 # Dependency injection (set via init())
@@ -20,20 +20,21 @@ def init(mcp_client, get_installed_gui_apps_fn):
 
 def get_datetime() -> str:
     """Return the current date, time, and day of week."""
-    from datetime import datetime
     import locale
-    locale.setlocale(locale.LC_TIME, '')
+    from datetime import datetime
+
+    locale.setlocale(locale.LC_TIME, "")
     now = datetime.now()
     return now.strftime("It is %c.")
 
 
 def list_installed_applications() -> str:
     """Lists all installed GUI applications on the system."""
-    log_and_print(f"\n[SYSTEM] Scanning for installed applications...")
+    log_and_print("\n[SYSTEM] Scanning for installed applications...")
     try:
         app_data = _get_installed_gui_apps()
-        app_count = app_data['count']
-        samples = app_data['samples']
+        app_count = app_data["count"]
+        samples = app_data["samples"]
 
         if app_count == 0:
             return "No applications found."
@@ -50,20 +51,20 @@ def send_notification(summary: str, body: str = "", delay: str = "") -> str:
     """Send a desktop notification."""
     log_and_print(f"\n[SYSTEM] Sending notification: {summary}")
     try:
-        return _mcp_client.call_tool("send_notification", {
-            "summary": summary, "body": body, "delay": delay
-        })
+        return _mcp_client.call_tool(
+            "send_notification", {"summary": summary, "body": body, "delay": delay}
+        )
     except Exception as e:
         return f"Error sending notification: {str(e)}"
 
 
 def cleanup_screenshots() -> str:
     """Clean up temporary screenshot files by moving them to trash."""
-    log_and_print(f"\n[SYSTEM] Cleaning up screenshots...")
+    log_and_print("\n[SYSTEM] Cleaning up screenshots...")
     try:
         result = _mcp_client.call_tool("cleanup_screenshots", {})
         if result.startswith("Removed"):
-            match = re.search(r'Removed (\d+)', result)
+            match = re.search(r"Removed (\d+)", result)
             if match:
                 return f"Moved {match.group(1)} screenshots from Pictures/Screenshots to trash"
             else:
@@ -84,7 +85,9 @@ def search_apps(query: str) -> list:
         try:
             fp = subprocess.run(
                 ["flatpak", "search", "--columns=name,application,remotes", fp_query],
-                capture_output=True, text=True, timeout=15
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if fp.returncode == 0 and fp.stdout.strip():
                 found_any = False
@@ -104,13 +107,10 @@ def search_apps(query: str) -> list:
         except FileNotFoundError:
             break
         except Exception as e:
-            log_and_print(f"[SYSTEM] flatpak search error: {e}", level='warning')
+            log_and_print(f"[SYSTEM] flatpak search error: {e}", level="warning")
             break
     try:
-        dnf = subprocess.run(
-            ["dnf", "search", query],
-            capture_output=True, text=True, timeout=15
-        )
+        dnf = subprocess.run(["dnf", "search", query], capture_output=True, text=True, timeout=15)
         if dnf.returncode == 0 and dnf.stdout.strip():
             for line in dnf.stdout.strip().split("\n"):
                 if len(results) >= 5:
@@ -124,7 +124,7 @@ def search_apps(query: str) -> list:
     except FileNotFoundError:
         pass
     except Exception as e:
-        log_and_print(f"[SYSTEM] dnf search error: {e}", level='warning')
+        log_and_print(f"[SYSTEM] dnf search error: {e}", level="warning")
     return results
 
 
@@ -138,9 +138,10 @@ def run_install(app_id: str, source: str = "") -> str:
                 cmd.append(source)
             cmd.append(app_id)
         else:
-            has_sudo = subprocess.run(
-                ["sudo", "-n", "true"], capture_output=True, timeout=5
-            ).returncode == 0
+            has_sudo = (
+                subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5).returncode
+                == 0
+            )
             if not has_sudo:
                 return "Installing RPM packages requires sudo. Please type your sudo password in the terminal, then try again."
             cmd = ["sudo", "dnf", "install", "-y", app_id]
@@ -149,7 +150,10 @@ def run_install(app_id: str, source: str = "") -> str:
             return f"Successfully installed {app_id}."
         else:
             stderr = result.stderr.strip()
-            if "already installed" in stderr.lower() or "already installed" in result.stdout.lower():
+            if (
+                "already installed" in stderr.lower()
+                or "already installed" in result.stdout.lower()
+            ):
                 return f"{app_id} is already installed."
             return f"Installation failed: {stderr}"
     except subprocess.TimeoutExpired:
@@ -165,9 +169,10 @@ def run_uninstall(app_id: str, source: str = "") -> str:
         if is_flatpak:
             cmd = ["flatpak", "uninstall", "-y", app_id]
         else:
-            has_sudo = subprocess.run(
-                ["sudo", "-n", "true"], capture_output=True, timeout=5
-            ).returncode == 0
+            has_sudo = (
+                subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5).returncode
+                == 0
+            )
             if not has_sudo:
                 return "Uninstalling RPM packages requires sudo. Please type your sudo password in the terminal, then try again."
             cmd = ["sudo", "dnf", "remove", "-y", app_id]
@@ -182,13 +187,16 @@ def run_uninstall(app_id: str, source: str = "") -> str:
 
 def get_app_shortcuts(app_name: str) -> str:
     """Look up keyboard shortcuts for an application."""
-    from shortcuts.gnome_shortcuts import get_shortcuts_for_app
     import json as _json
+
+    from shortcuts.gnome_shortcuts import get_shortcuts_for_app
 
     app_lower = app_name.lower().strip()
     shortcuts = {}
 
-    shortcuts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shortcuts")
+    shortcuts_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shortcuts"
+    )
     json_path = os.path.join(shortcuts_dir, "app_shortcuts.json")
     try:
         with open(json_path) as f:

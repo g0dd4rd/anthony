@@ -1,13 +1,20 @@
 import json
 import time
 
-from commands import step, _mcp_client, _speak, _listen
-from commands import _smart_match_window, _get_friendly_app_name, _dialog_handler
-from config.aliases import APP_A11Y_NAMES
 from app_index import app_name_map
+from commands import (
+    _dialog_handler,
+    _get_friendly_app_name,
+    _listen,
+    _mcp_client,
+    _smart_match_window,
+    _speak,
+    step,
+)
+from config.aliases import APP_A11Y_NAMES
 from utils import log_and_print
 
-DIALOG_CHECK_SHORTCUTS = {'Alt+F4', 'Ctrl+Q', 'Ctrl+W', 'Ctrl+Shift+W'}
+DIALOG_CHECK_SHORTCUTS = {"Alt+F4", "Ctrl+Q", "Ctrl+W", "Ctrl+Shift+W"}
 
 
 def _resolve_atspi_name(wm_class):
@@ -16,7 +23,7 @@ def _resolve_atspi_name(wm_class):
         return None
     exec_name = app_name_map.get(wm_class.lower())
     if not exec_name:
-        stripped = wm_class.replace('org.gnome.', '').replace('org.', '')
+        stripped = wm_class.replace("org.gnome.", "").replace("org.", "")
         exec_name = app_name_map.get(stripped.lower())
     if exec_name:
         return APP_A11Y_NAMES.get(exec_name)
@@ -24,7 +31,7 @@ def _resolve_atspi_name(wm_class):
 
 
 def _send_key_via_mcp(keys):
-    if '+' in keys:
+    if "+" in keys:
         _mcp_client.call_tool("key_combo", {"keys": keys})
     else:
         _mcp_client.call_tool("key_press", {"key": keys})
@@ -50,7 +57,7 @@ def _verify_window_state(window_id, expected):
         windows = _list_windows()
         if not windows:
             return None, None
-        window = next((w for w in windows if w['id'] == window_id), None)
+        window = next((w for w in windows if w["id"] == window_id), None)
         if window is None:
             return False, None
         for key, value in expected.items():
@@ -67,14 +74,16 @@ def _handle_save_dialog(window_id=None, atspi_name=None):
         time.sleep(0.5)
         if window_id:
             windows = _list_windows()
-            if windows is not None and not any(w['id'] == window_id for w in windows):
+            if windows is not None and not any(w["id"] == window_id for w in windows):
                 return None
         dialog = _dialog_handler.detect_save_dialog(app_name=atspi_name, timeout=5.0)
         if not dialog:
             return None
 
-    buttons = dialog['info']['buttons']
-    button_list = ', '.join([btn['text'] for btn in buttons]) if buttons else "Save, Discard, Cancel"
+    buttons = dialog["info"]["buttons"]
+    button_list = (
+        ", ".join([btn["text"] for btn in buttons]) if buttons else "Save, Discard, Cancel"
+    )
     _speak(f"The window has unsaved changes. Options: {button_list}. What would you like to do?")
     user_choice = _listen()
 
@@ -83,7 +92,9 @@ def _handle_save_dialog(window_id=None, atspi_name=None):
         _mcp_client.call_tool("key_combo", {"keys": "Escape"})
         return "canceled"
 
-    success = _dialog_handler.activate_button_by_keyboard(dialog, user_choice, key_callback=_send_key_via_mcp)
+    success = _dialog_handler.activate_button_by_keyboard(
+        dialog, user_choice, key_callback=_send_key_via_mcp
+    )
     if not success:
         _speak(f"Could not understand choice {user_choice}")
         _mcp_client.call_tool("key_combo", {"keys": "Escape"})
@@ -95,14 +106,20 @@ def _handle_save_dialog(window_id=None, atspi_name=None):
 
 # --- Focus / Open ---
 
-@step('switch to {app}', 'focus {app}', 'go to {app}',
-      category='window', help_text='Switch to or focus an application window')
+
+@step(
+    "switch to {app}",
+    "focus {app}",
+    "go to {app}",
+    category="window",
+    help_text="Switch to or focus an application window",
+)
 def handle_focus(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', app))
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", app))
     _mcp_client.call_tool("focus_window", {"window_id": window_id})
     matched, _ = _verify_window_state(window_id, {"focused": True})
     if matched is False:
@@ -114,31 +131,43 @@ def _get_focused_window():
     windows = _list_windows()
     if not windows:
         return None
-    return next((w for w in windows if w.get('focused', False)), None)
+    return next((w for w in windows if w.get("focused", False)), None)
 
 
 # --- Focus (focused) ---
 
-@step('focus', 'focus window', 'focus the window',
-      category='window', help_text='Focus the current window')
+
+@step(
+    "focus",
+    "focus window",
+    "focus the window",
+    category="window",
+    help_text="Focus the current window",
+)
 def handle_focus_focused(context):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    friendly = _get_friendly_app_name(target.get('wmClass', ''))
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
     return f"{friendly} is already focused"
 
 
 # --- Close ---
 
-@step('close', 'close window', 'close the window',
-      category='window', help_text='Close the focused window')
+
+@step(
+    "close",
+    "close window",
+    "close the window",
+    category="window",
+    help_text="Close the focused window",
+)
 def handle_close_focused(context):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    window_id = target['id']
-    wm_class = target.get('wmClass', '')
+    window_id = target["id"]
+    wm_class = target.get("wmClass", "")
     friendly = _get_friendly_app_name(wm_class)
     atspi_name = _resolve_atspi_name(wm_class)
     log_and_print(f"[CLOSE] Focusing and closing {friendly} (id={window_id}, atspi={atspi_name})")
@@ -151,19 +180,25 @@ def handle_close_focused(context):
     if dialog_result:
         return f"Successfully closed {friendly}"
     windows_after = _list_windows()
-    if windows_after and not any(w['id'] == window_id for w in windows_after):
+    if windows_after and not any(w["id"] == window_id for w in windows_after):
         return f"Successfully closed {friendly}"
     return f"Close command sent to {friendly}"
 
 
-@step('close {app}', 'quit {app}', 'exit {app}', 'kill {app}',
-      category='window', help_text='Close an application window')
+@step(
+    "close {app}",
+    "quit {app}",
+    "exit {app}",
+    "kill {app}",
+    category="window",
+    help_text="Close an application window",
+)
 def handle_close(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    wm_class = target.get('wmClass', app)
+    window_id = target["id"]
+    wm_class = target.get("wmClass", app)
     friendly = _get_friendly_app_name(wm_class)
     atspi_name = _resolve_atspi_name(wm_class)
     log_and_print(f"[CLOSE] Focusing and closing {friendly} (id={window_id}, atspi={atspi_name})")
@@ -178,21 +213,27 @@ def handle_close(context, app):
         return f"Successfully closed {friendly}"
 
     windows_after = _list_windows()
-    if windows_after and not any(w['id'] == window_id for w in windows_after):
+    if windows_after and not any(w["id"] == window_id for w in windows_after):
         return f"Successfully closed {friendly}"
     return f"Close command sent to {friendly}"
 
 
 # --- Minimize ---
 
-@step('minimize', 'minimize window', 'minimize the window',
-      category='window', help_text='Minimize the focused window')
+
+@step(
+    "minimize",
+    "minimize window",
+    "minimize the window",
+    category="window",
+    help_text="Minimize the focused window",
+)
 def handle_minimize_focused(context):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', ''))
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
     _mcp_client.call_tool("minimize_window", {"window_id": window_id})
     matched, _ = _verify_window_state(window_id, {"minimized": True})
     if matched is False:
@@ -200,14 +241,13 @@ def handle_minimize_focused(context):
     return f"Minimized {friendly}"
 
 
-@step('minimize {app}', 'hide {app}',
-      category='window', help_text='Minimize an application window')
+@step("minimize {app}", "hide {app}", category="window", help_text="Minimize an application window")
 def handle_minimize(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', app))
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", app))
     _mcp_client.call_tool("minimize_window", {"window_id": window_id})
     matched, _ = _verify_window_state(window_id, {"minimized": True})
     if matched is False:
@@ -217,15 +257,22 @@ def handle_minimize(context, app):
 
 # --- Maximize ---
 
-@step('maximize', 'maximize window', 'maximize the window', 'fullscreen',
-      category='window', help_text='Maximize the focused window')
+
+@step(
+    "maximize",
+    "maximize window",
+    "maximize the window",
+    "fullscreen",
+    category="window",
+    help_text="Maximize the focused window",
+)
 def handle_maximize_focused(context):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', ''))
-    if target.get('maximized', False):
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
+    if target.get("maximized", False):
         _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
         return f"Restored {friendly}"
     _mcp_client.call_tool("maximize_window", {"window_id": window_id})
@@ -235,16 +282,15 @@ def handle_maximize_focused(context):
     return f"Maximized {friendly}"
 
 
-@step('maximize {app}',
-      category='window', help_text='Maximize an application window')
+@step("maximize {app}", category="window", help_text="Maximize an application window")
 def handle_maximize(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', app))
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", app))
 
-    if target.get('maximized', False):
+    if target.get("maximized", False):
         _mcp_client.call_tool("unmaximize_window", {"window_id": window_id})
         return f"Restored {friendly}"
     else:
@@ -257,15 +303,21 @@ def handle_maximize(context, app):
 
 # --- Restore ---
 
-@step('restore', 'restore window', 'restore the window',
-      category='window', help_text='Restore the focused window')
+
+@step(
+    "restore",
+    "restore window",
+    "restore the window",
+    category="window",
+    help_text="Restore the focused window",
+)
 def handle_restore_focused(context):
     target = _get_focused_window()
     if not target:
         return "No focused window found"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', ''))
-    is_maximized = target.get('maximized', False)
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
+    is_maximized = target.get("maximized", False)
     _mcp_client.call_tool("unminimize_window", {"window_id": window_id})
     _mcp_client.call_tool("focus_window", {"window_id": window_id})
     if is_maximized:
@@ -273,15 +325,19 @@ def handle_restore_focused(context):
     return f"Restored {friendly}"
 
 
-@step('restore {app}', 'unminimize {app}',
-      category='window', help_text='Restore a minimized or maximized window')
+@step(
+    "restore {app}",
+    "unminimize {app}",
+    category="window",
+    help_text="Restore a minimized or maximized window",
+)
 def handle_restore(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', app))
-    is_maximized = target.get('maximized', False)
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", app))
+    is_maximized = target.get("maximized", False)
 
     _mcp_client.call_tool("unminimize_window", {"window_id": window_id})
     _mcp_client.call_tool("focus_window", {"window_id": window_id})
@@ -292,48 +348,56 @@ def handle_restore(context, app):
 
 # --- List windows ---
 
-@step('list windows', 'what windows are open', 'what applications are running',
-      'what apps are running', "what's running", 'show windows',
-      category='window', help_text='List all open windows')
+
+@step(
+    "list windows",
+    "what windows are open",
+    "what applications are running",
+    "what apps are running",
+    "what's running",
+    "show windows",
+    category="window",
+    help_text="List all open windows",
+)
 def handle_list_windows(context):
     windows = _list_windows()
     if not windows:
         return "No windows are currently open."
-    titles = [w.get('title', 'Untitled') for w in windows[:10]]
+    titles = [w.get("title", "Untitled") for w in windows[:10]]
     return f"Found {len(windows)} open windows: {', '.join(titles)}"
 
 
 # --- Window tiling ---
 
 _TILE_POSITIONS = {
-    'left half':    lambda w, h: (0, 0, w // 2, h),
-    'right half':   lambda w, h: (w // 2, 0, w // 2, h),
-    'top half':     lambda w, h: (0, 0, w, h // 2),
-    'bottom half':  lambda w, h: (0, h // 2, w, h // 2),
-    'top left':     lambda w, h: (0, 0, w // 2, h // 2),
-    'top right':    lambda w, h: (w // 2, 0, w // 2, h // 2),
-    'bottom left':  lambda w, h: (0, h // 2, w // 2, h // 2),
-    'bottom right': lambda w, h: (w // 2, h // 2, w // 2, h // 2),
-    'left side':    lambda w, h: (0, 0, w // 2, h),
-    'right side':   lambda w, h: (w // 2, 0, w // 2, h),
-    'the left':     lambda w, h: (0, 0, w // 2, h),
-    'the right':    lambda w, h: (w // 2, 0, w // 2, h),
-    'left':         lambda w, h: (0, 0, w // 2, h),
-    'right':        lambda w, h: (w // 2, 0, w // 2, h),
-    'to left':      lambda w, h: (0, 0, w // 2, h),
-    'to right':     lambda w, h: (w // 2, 0, w // 2, h),
-    'to the left':  lambda w, h: (0, 0, w // 2, h),
-    'to the right': lambda w, h: (w // 2, 0, w // 2, h),
-    'top':          lambda w, h: (0, 0, w, h // 2),
-    'bottom':       lambda w, h: (0, h // 2, w, h // 2),
-    'center':       lambda w, h: (w // 4, h // 4, w // 2, h // 2),
+    "left half": lambda w, h: (0, 0, w // 2, h),
+    "right half": lambda w, h: (w // 2, 0, w // 2, h),
+    "top half": lambda w, h: (0, 0, w, h // 2),
+    "bottom half": lambda w, h: (0, h // 2, w, h // 2),
+    "top left": lambda w, h: (0, 0, w // 2, h // 2),
+    "top right": lambda w, h: (w // 2, 0, w // 2, h // 2),
+    "bottom left": lambda w, h: (0, h // 2, w // 2, h // 2),
+    "bottom right": lambda w, h: (w // 2, h // 2, w // 2, h // 2),
+    "left side": lambda w, h: (0, 0, w // 2, h),
+    "right side": lambda w, h: (w // 2, 0, w // 2, h),
+    "the left": lambda w, h: (0, 0, w // 2, h),
+    "the right": lambda w, h: (w // 2, 0, w // 2, h),
+    "left": lambda w, h: (0, 0, w // 2, h),
+    "right": lambda w, h: (w // 2, 0, w // 2, h),
+    "to left": lambda w, h: (0, 0, w // 2, h),
+    "to right": lambda w, h: (w // 2, 0, w // 2, h),
+    "to the left": lambda w, h: (0, 0, w // 2, h),
+    "to the right": lambda w, h: (w // 2, 0, w // 2, h),
+    "top": lambda w, h: (0, 0, w, h // 2),
+    "bottom": lambda w, h: (0, h // 2, w, h // 2),
+    "center": lambda w, h: (w // 4, h // 4, w // 2, h // 2),
 }
 
 
 def _tile_window(app_name, position):
-    for suffix in (' of the screen', ' of screen', ' corner', ' side'):
+    for suffix in (" of the screen", " of screen", " corner", " side"):
         if position.endswith(suffix):
-            position = position[:-len(suffix)]
+            position = position[: -len(suffix)]
             break
     position = position.strip()
     calc_fn = _TILE_POSITIONS.get(position)
@@ -344,61 +408,79 @@ def _tile_window(app_name, position):
         target, _ = _find_window(app_name)
     else:
         windows = _list_windows()
-        target = next((w for w in (windows or []) if w.get('focused', False)), None)
+        target = next((w for w in (windows or []) if w.get("focused", False)), None)
 
     if not target:
         return "No window to tile"
 
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', ''))
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", ""))
 
     try:
         mon_result = _mcp_client.call_tool("get_monitors", {})
         monitors = json.loads(mon_result)
-        primary = next((m for m in monitors if m.get('primary')), monitors[0])
-        scr_w = primary['width']
-        scr_h = primary['height']
+        primary = next((m for m in monitors if m.get("primary")), monitors[0])
+        scr_w = primary["width"]
+        scr_h = primary["height"]
     except Exception:
         scr_w, scr_h = 1920, 1080
 
     tx, ty, tw, th = calc_fn(scr_w, scr_h)
-    _mcp_client.call_tool("move_resize_window", {
-        "window_id": window_id, "x": tx, "y": ty, "width": tw, "height": th
-    })
+    _mcp_client.call_tool(
+        "move_resize_window", {"window_id": window_id, "x": tx, "y": ty, "width": tw, "height": th}
+    )
     return f"Moved {friendly} to the {position}"
 
 
-@step('move {app} to the {position}', 'tile {app} to the {position}',
-      'snap {app} to the {position}', 'put {app} on the {position}',
-      'snap {app} {position}', 'tile {app} {position}', 'move {app} {position}',
-      category='window', help_text='Tile a window to a screen position')
+@step(
+    "move {app} to the {position}",
+    "tile {app} to the {position}",
+    "snap {app} to the {position}",
+    "put {app} on the {position}",
+    "snap {app} {position}",
+    "tile {app} {position}",
+    "move {app} {position}",
+    category="window",
+    help_text="Tile a window to a screen position",
+)
 def handle_tile_app(context, app, position):
     return _tile_window(app, position)
 
 
-@step('tile {position}', 'snap {position}', 'move to the {position}',
-      'move to {position}',
-      category='window', help_text='Tile the focused window to a position')
+@step(
+    "tile {position}",
+    "snap {position}",
+    "move to the {position}",
+    "move to {position}",
+    category="window",
+    help_text="Tile the focused window to a position",
+)
 def handle_tile_focused(context, position):
     return _tile_window(None, position)
 
 
 # --- Window screenshot ---
 
-@step('take a screenshot of {app}', 'take screenshot of {app}',
-      'screenshot of {app}', 'capture {app}',
-      'screenshot {app}',
-      category='window', help_text='Take a screenshot of a specific window')
+
+@step(
+    "take a screenshot of {app}",
+    "take screenshot of {app}",
+    "screenshot of {app}",
+    "capture {app}",
+    "screenshot {app}",
+    category="window",
+    help_text="Take a screenshot of a specific window",
+)
 def handle_window_screenshot(context, app):
     target, _ = _find_window(app)
     if not target:
         return f"No window found matching '{app}'"
-    window_id = target['id']
-    friendly = _get_friendly_app_name(target.get('wmClass', app))
-    result = _mcp_client.call_tool("screenshot_window", {
-        "window_id": window_id, "include_frame": True,
-        "include_cursor": False, "format": "path"
-    })
+    window_id = target["id"]
+    friendly = _get_friendly_app_name(target.get("wmClass", app))
+    result = _mcp_client.call_tool(
+        "screenshot_window",
+        {"window_id": window_id, "include_frame": True, "include_cursor": False, "format": "path"},
+    )
     if result.startswith("Error"):
         return result
     return f"Screenshot of {friendly} saved to Screenshots."

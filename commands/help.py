@@ -1,4 +1,4 @@
-from commands import step, registry
+from commands import registry, step
 
 CATEGORY_ALIASES = {
     "windows": "window",
@@ -53,22 +53,35 @@ def _resolve_category(name):
     return None
 
 
-@step('help', 'what can you do', 'what commands are available',
-      'what are the commands', 'show commands',
-      category='help', help_text='List available command categories')
+@step(
+    "help",
+    "what can you do",
+    "what commands are available",
+    "what are the commands",
+    "show commands",
+    category="help",
+    help_text="List available command categories",
+)
 def handle_help(context):
     categories = registry.get_categories()
-    cat_names = [CATEGORY_LABELS.get(c, c) for c in sorted(categories) if c != 'help']
+    cat_names = [CATEGORY_LABELS.get(c, c) for c in sorted(categories) if c != "help"]
     return f"I can help with: {', '.join(cat_names)}. Say help with a category for details."
 
 
-@step('help with {category}', 'help {category}', '{category} commands',
-      'what {category} commands are there',
-      category='help', help_text='List commands in a specific category')
+@step(
+    "help with {category}",
+    "help {category}",
+    "{category} commands",
+    "what {category} commands are there",
+    category="help",
+    help_text="List commands in a specific category",
+)
 def handle_help_category(context, category):
     resolved = _resolve_category(category)
     if not resolved:
-        cat_names = [CATEGORY_LABELS.get(c, c) for c in sorted(registry.get_categories()) if c != 'help']
+        cat_names = [
+            CATEGORY_LABELS.get(c, c) for c in sorted(registry.get_categories()) if c != "help"
+        ]
         return f"No category matching '{category}'. Available: {', '.join(cat_names)}"
 
     entries = registry.get_categories()[resolved]
@@ -76,8 +89,8 @@ def handle_help_category(context, category):
     help_texts = []
     seen = set()
     for entry in entries:
-        if entry['help_text'] and entry['help_text'] not in seen:
-            seen.add(entry['help_text'])
-            help_texts.append(entry['help_text'])
+        if entry["help_text"] and entry["help_text"] not in seen:
+            seen.add(entry["help_text"])
+            help_texts.append(entry["help_text"])
 
     return f"{label.capitalize()} commands: {'. '.join(help_texts)}."

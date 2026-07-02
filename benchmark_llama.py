@@ -4,7 +4,6 @@ Tests text generation, tool calling, and vision. Unloads model between runs."""
 
 import argparse
 import base64
-import json
 import os
 import signal
 import subprocess
@@ -66,15 +65,68 @@ TEXT_PROMPTS = [
 ]
 
 TOOL_SCHEMAS = [
-    {"type": "function", "function": {"name": "window_control", "description": "Window management: list, focus, close, minimize, maximize, restore, screenshot windows.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: list | focus | close | minimize | maximize | restore | screenshot"}, "window_name": {"type": "string", "description": "Application name", "default": ""}}, "required": ["action"]}}},
-    {"type": "function", "function": {"name": "audio_control", "description": "Audio control: volume set/increase/decrease, mute, unmute, media playback.", "parameters": {"type": "object", "properties": {"action": {"type": "string", "description": "Action: volume | mute | unmute | play | pause | next | previous"}, "level": {"type": "integer", "description": "Volume level 0-100", "default": 0}}, "required": ["action"]}}},
-    {"type": "function", "function": {"name": "get_datetime", "description": "Get the current date, time, and day of week.", "parameters": {"type": "object", "properties": {}}}},
+    {
+        "type": "function",
+        "function": {
+            "name": "window_control",
+            "description": "Window management: list, focus, close, minimize, maximize, restore, screenshot windows.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Action: list | focus | close | minimize | maximize | restore | screenshot",
+                    },
+                    "window_name": {
+                        "type": "string",
+                        "description": "Application name",
+                        "default": "",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "audio_control",
+            "description": "Audio control: volume set/increase/decrease, mute, unmute, media playback.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Action: volume | mute | unmute | play | pause | next | previous",
+                    },
+                    "level": {"type": "integer", "description": "Volume level 0-100", "default": 0},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_datetime",
+            "description": "Get the current date, time, and day of week.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 TOOL_PROMPTS = [
-    {"label": "tool_maximize", "prompt": "Maximize the firefox window", "expect_tool": "window_control"},
+    {
+        "label": "tool_maximize",
+        "prompt": "Maximize the firefox window",
+        "expect_tool": "window_control",
+    },
     {"label": "tool_volume", "prompt": "Set volume to 50 percent", "expect_tool": "audio_control"},
-    {"label": "tool_datetime", "prompt": "What time is it right now?", "expect_tool": "get_datetime"},
+    {
+        "label": "tool_datetime",
+        "prompt": "What time is it right now?",
+        "expect_tool": "get_datetime",
+    },
 ]
 
 VISION_PROMPTS = [
@@ -90,9 +142,7 @@ def encode_image(path):
 
 def kill_server():
     try:
-        result = subprocess.run(
-            ["fuser", f"{PORT}/tcp"], capture_output=True, text=True
-        )
+        result = subprocess.run(["fuser", f"{PORT}/tcp"], capture_output=True, text=True)
         pids = result.stdout.strip().split()
         for pid in pids:
             pid = pid.strip()
@@ -144,7 +194,7 @@ def start_server(config, use_mmproj=False):
     )
 
     print("  Waiting for server", end="", flush=True)
-    for i in range(180):
+    for _i in range(180):
         time.sleep(1)
         print(".", end="", flush=True)
         try:
@@ -223,7 +273,9 @@ def run_text_tests():
             "response": r["response_text"][:150],
         }
         results.append(result)
-        print(f"    {t['label']}: {r['completion_tokens']} tok / {r['elapsed']:.2f}s = {tps:.1f} tok/s")
+        print(
+            f"    {t['label']}: {r['completion_tokens']} tok / {r['elapsed']:.2f}s = {tps:.1f} tok/s"
+        )
         if VERBOSE:
             if r["reasoning_content"]:
                 print(f"      [thinking] {r['reasoning_content']}")
@@ -265,7 +317,9 @@ def run_tool_tests():
             print(f"      [content]  {r['content']}")
             if r["tool_calls"]:
                 for tc in r["tool_calls"]:
-                    print(f"      [tool]     {tc['function']['name']}({tc['function']['arguments']})")
+                    print(
+                        f"      [tool]     {tc['function']['name']}({tc['function']['arguments']})"
+                    )
     return results
 
 
@@ -274,10 +328,16 @@ def run_vision_tests(image_b64):
     for t in VISION_PROMPTS:
         messages = [
             {"role": "system", "content": SYSTEM_VISION},
-            {"role": "user", "content": [
-                {"type": "text", "text": t["prompt"]},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": t["prompt"]},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+                    },
+                ],
+            },
         ]
         r = call_api(messages, max_tokens=300)
         tps = r["completion_tokens"] / r["elapsed"] if r["elapsed"] > 0 else 0
@@ -294,7 +354,9 @@ def run_vision_tests(image_b64):
         }
         results.append(result)
         mark = "OK" if has_response else "EMPTY"
-        print(f"    {t['label']}: {r['completion_tokens']} tok / {r['elapsed']:.2f}s = {tps:.1f} tok/s [{mark}]")
+        print(
+            f"    {t['label']}: {r['completion_tokens']} tok / {r['elapsed']:.2f}s = {tps:.1f} tok/s [{mark}]"
+        )
         if VERBOSE:
             if r["reasoning_content"]:
                 print(f"      [thinking] {r['reasoning_content']}")
@@ -317,10 +379,11 @@ def print_summary(all_results):
                 rows.append({**t, "config": config_name, "category": category, "status": status})
 
     # Group by test label, sort each group by time
-    from itertools import groupby
-    test_order = [t["label"] for t in TEXT_PROMPTS] + \
-                 [t["label"] for t in TOOL_PROMPTS] + \
-                 [t["label"] for t in VISION_PROMPTS]
+    test_order = (
+        [t["label"] for t in TEXT_PROMPTS]
+        + [t["label"] for t in TOOL_PROMPTS]
+        + [t["label"] for t in VISION_PROMPTS]
+    )
 
     print()
     print("=" * 90)
@@ -328,7 +391,9 @@ def print_summary(all_results):
     print("=" * 90)
 
     for test_label in test_order:
-        test_rows = sorted([r for r in rows if r["label"] == test_label], key=lambda r: r["elapsed"])
+        test_rows = sorted(
+            [r for r in rows if r["label"] == test_label], key=lambda r: r["elapsed"]
+        )
         if not test_rows:
             continue
         cat = test_rows[0]["category"]
@@ -336,15 +401,19 @@ def print_summary(all_results):
         for i, r in enumerate(test_rows):
             rank = i + 1
             status = f"  [{r['status']}]" if r["status"] else ""
-            print(f"    {rank}. {r['config']:<16} {r['elapsed']:>6.2f}s  {r['tokens_per_sec']:>5.1f} tok/s  "
-                  f"({r['completion_tokens']} tok){status}")
+            print(
+                f"    {rank}. {r['config']:<16} {r['elapsed']:>6.2f}s  {r['tokens_per_sec']:>5.1f} tok/s  "
+                f"({r['completion_tokens']} tok){status}"
+            )
 
     # Averages table sorted by total time
     print()
     print("=" * 90)
     print("AVERAGES (sorted by total response time)")
     print("=" * 90)
-    print(f"  {'Config':<16} {'Avg Time':>10} {'Avg Tok/s':>10} {'Text':>10} {'Tools':>10} {'Vision':>10}")
+    print(
+        f"  {'Config':<16} {'Avg Time':>10} {'Avg Tok/s':>10} {'Text':>10} {'Tools':>10} {'Vision':>10}"
+    )
     print(f"  {'-' * 70}")
 
     config_stats = []
@@ -363,22 +432,36 @@ def print_summary(all_results):
         config_stats.append((config_name, avg_time, avg_tps, cat_tps))
 
     for config_name, avg_time, avg_tps, cat_tps in sorted(config_stats, key=lambda x: x[1]):
-        print(f"  {config_name:<16} {avg_time:>9.2f}s {avg_tps:>9.1f} "
-              f"{cat_tps.get('text', 0):>9.1f} {cat_tps.get('tools', 0):>9.1f} "
-              f"{cat_tps.get('vision', 0):>9.1f}")
+        print(
+            f"  {config_name:<16} {avg_time:>9.2f}s {avg_tps:>9.1f} "
+            f"{cat_tps.get('text', 0):>9.1f} {cat_tps.get('tools', 0):>9.1f} "
+            f"{cat_tps.get('vision', 0):>9.1f}"
+        )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark Gemma on llama.cpp (Vulkan/SYCL, CPU/GPU)")
-    parser.add_argument("--configs", nargs="+", choices=["vulkan-gpu", "vulkan-cpu", "sycl-gpu", "sycl-cpu"],
-                        help="Run only specific configs (default: all)")
+    parser = argparse.ArgumentParser(
+        description="Benchmark Gemma on llama.cpp (Vulkan/SYCL, CPU/GPU)"
+    )
+    parser.add_argument(
+        "--configs",
+        nargs="+",
+        choices=["vulkan-gpu", "vulkan-cpu", "sycl-gpu", "sycl-cpu"],
+        help="Run only specific configs (default: all)",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Path to GGUF model")
     parser.add_argument("--mmproj", default=DEFAULT_MMPROJ, help="Path to mmproj GGUF")
-    parser.add_argument("--no-mmproj", action="store_true", help="Don't use mmproj (for models with built-in vision like Qwen VL)")
+    parser.add_argument(
+        "--no-mmproj",
+        action="store_true",
+        help="Don't use mmproj (for models with built-in vision like Qwen VL)",
+    )
     parser.add_argument("--skip-tools", action="store_true", help="Skip tool calling tests")
     parser.add_argument("--skip-vision", action="store_true", help="Skip vision tests")
     parser.add_argument("--image", default=TEST_IMAGE, help="Image path for vision tests")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show full LLM output (thinking + content)")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show full LLM output (thinking + content)"
+    )
     args = parser.parse_args()
 
     global VERBOSE, MODEL, MMPROJ
@@ -387,8 +470,10 @@ def main():
     MMPROJ = None if args.no_mmproj else args.mmproj
 
     config_map = {
-        "vulkan-gpu": 0, "vulkan-cpu": 1,
-        "sycl-gpu": 2, "sycl-cpu": 3,
+        "vulkan-gpu": 0,
+        "vulkan-cpu": 1,
+        "sycl-gpu": 2,
+        "sycl-cpu": 3,
     }
     if args.configs:
         configs = [CONFIGS[config_map[c]] for c in args.configs]
@@ -416,7 +501,7 @@ def main():
         print(f"CONFIG: {config['name']}")
         print("=" * 60)
 
-        print(f"\n  Starting server...")
+        print("\n  Starting server...")
         proc = start_server(config, use_mmproj=True)
         if not proc:
             print(f"  SKIPPING {config['name']} — server failed to start")
@@ -425,7 +510,7 @@ def main():
 
         config_results = {}
 
-        print(f"\n  [TEXT GENERATION]")
+        print("\n  [TEXT GENERATION]")
         try:
             config_results["text"] = run_text_tests()
         except Exception as e:
@@ -433,7 +518,7 @@ def main():
             config_results["text"] = []
 
         if not args.skip_tools:
-            print(f"\n  [TOOL CALLING]")
+            print("\n  [TOOL CALLING]")
             try:
                 config_results["tools"] = run_tool_tests()
             except Exception as e:
@@ -443,7 +528,7 @@ def main():
             config_results["tools"] = []
 
         if image_b64 and not args.skip_vision:
-            print(f"\n  [VISION]")
+            print("\n  [VISION]")
             try:
                 config_results["vision"] = run_vision_tests(image_b64)
             except Exception as e:
@@ -452,9 +537,9 @@ def main():
         else:
             config_results["vision"] = []
 
-        print(f"\n  Stopping server...")
+        print("\n  Stopping server...")
         kill_server()
-        print(f"  Server stopped.")
+        print("  Server stopped.")
 
         all_results[config["name"]] = config_results
         print()
