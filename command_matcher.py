@@ -32,6 +32,11 @@ _SPLIT_PATTERN = re.compile(r"\s+and\s+then\s+|\s+then\s+|\s+and\s+", re.IGNOREC
 
 _PRONOUN_WORDS = {"it", "that", "the window", "the app", "this window", "this app"}
 
+_KEYWORD_CATEGORIES = {
+    "workspace": "workspace",
+    "monitor": "window",
+}
+
 
 def init(registry, mcp_client, speak_fn, embedding_model, detect_app_fn, check_health_fn=None):
     global _registry, _mcp_client, _speak
@@ -173,7 +178,16 @@ def execute(user_input, context=None):
     for _i, segment in enumerate(segments):
         segment = _resolve_pronouns(segment, context.get("last_app"))
 
-        entry, params = _registry.match(segment)
+        entry, params = None, {}
+        segment_lower = segment.lower()
+        for keyword, category in _KEYWORD_CATEGORIES.items():
+            if keyword in segment_lower:
+                entry, params = _registry.match_category(segment, category)
+                if entry:
+                    break
+
+        if not entry:
+            entry, params = _registry.match(segment)
 
         if not entry and last_verb:
             augmented = f"{last_verb} {segment}"

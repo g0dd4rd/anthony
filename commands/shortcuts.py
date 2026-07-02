@@ -187,6 +187,24 @@ def handle_full_screen(context):
 
 
 @step(
+    "open a new {app} window",
+    "open new {app} window",
+    "new {app} window",
+    category="shortcuts",
+    help_text="Open a new window for a specific application",
+)
+def handle_new_window_for_app(context, app):
+    from commands.window import _find_window
+
+    target, _ = _find_window(app)
+    if not target:
+        return f"No window found matching '{app}'"
+    window_id = target["id"]
+    _mcp_client.call_tool("focus_window", {"window_id": window_id})
+    return _execute_app_action("New window")
+
+
+@step(
     "new window",
     "open a new window",
     "open new window",
