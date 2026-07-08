@@ -2,12 +2,10 @@ import base64
 import json
 import os
 
-import requests
 import webcolors
 
 from commands import _get_friendly_app_name, _mcp_client, step
-
-LLAMA_VISION_URL = "http://127.0.0.1:8081/v1/chat/completions"
+from orchestrator import LLAMA_SOCKET_PATH, post_unix
 
 
 def _call_vision(system_prompt, user_prompt, img_base64):
@@ -29,9 +27,8 @@ def _call_vision(system_prompt, user_prompt, img_base64):
         "max_tokens": 300,
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    resp = requests.post(LLAMA_VISION_URL, json=payload, timeout=120)
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    result = post_unix(LLAMA_SOCKET_PATH, "/v1/chat/completions", payload, timeout=120)
+    return result["choices"][0]["message"]["content"]
 
 
 # --- Screenshot ---
