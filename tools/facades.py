@@ -2,10 +2,10 @@ import json
 import os
 import time
 
-import requests
 import webcolors
 
 import utils
+from orchestrator import LLAMA_SOCKET_PATH, post_unix
 from utils import log_and_print
 from voice_io import listen_and_transcribe, speak
 
@@ -16,8 +16,6 @@ _mcp_client = None
 _dialog_handler = None
 _smart_match_window = None
 _get_friendly_app_name = None
-
-LLAMA_VISION_URL = "http://127.0.0.1:8081/v1/chat/completions"
 
 
 def init(mcp_client, dialog_handler, smart_match_fn, friendly_name_fn):
@@ -75,9 +73,8 @@ def _call_vision(system_prompt, user_prompt, img_base64):
         "max_tokens": 800,
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    resp = requests.post(LLAMA_VISION_URL, json=payload, timeout=120)
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    result = post_unix(LLAMA_SOCKET_PATH, "/v1/chat/completions", payload, timeout=120)
+    return result["choices"][0]["message"]["content"]
 
 
 DIALOG_CHECK_SHORTCUTS = {
