@@ -52,7 +52,7 @@ The script will:
 - **Silero VAD** - Voice activity detection (~2MB, auto-downloads on first run)
 - **all-MiniLM-L6-v2** - Sentence embeddings (~80MB, auto-downloads on first run)
 
-You also need a Gemma 4 model running via llama-server (not installed by this script). See `start_llama_server.sh`.
+You also need a Gemma 4 model running via llama-server. Use `./build_llama.sh` and `./download_model.sh` to set these up.
 
 ## Manual Installation
 
@@ -86,49 +86,13 @@ python3 -m piper.download_voices --download-dir . en_US-lessac-medium
 gsettings set org.gnome.desktop.interface toolkit-accessibility true
 ```
 
-### 6. llama-server (Gemma 4)
-
-Anthony uses Gemma 4 as its LLM for conversation mode and vision. It runs via llama-server with Vulkan GPU acceleration.
-
-#### Build llama.cpp
+### 6. llama.cpp + LLM Model
 
 ```bash
-git clone https://github.com/ggerganov/llama.cpp.git ~/llama.cpp
-cd ~/llama.cpp
-cmake -B build -DGGML_VULKAN=ON
-cmake --build build --config Release -j$(nproc)
-```
-
-#### Download and convert the model
-
-Download a Gemma 4 model from [Hugging Face](https://huggingface.co/google) in safetensors format. Two recommended variants:
-
-| Variant | Quantization | GGUF size | Speed |
-|---------|-------------|-----------|-------|
-| **Gemma 4 E2B** | Q8_0 | ~3GB | ~12-15 tok/s |
-| **Gemma 4 E4B** | Q4_K_M | ~5GB | ~6-7 tok/s |
-
-Convert and quantize (example for E4B):
-
-```bash
-mkdir -p ~/models
-
-# Convert HF safetensors to GGUF
-python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --outfile ~/models/gemma4-e4b.gguf
-
-# Quantize the base model
-~/llama.cpp/build/bin/llama-quantize ~/models/gemma4-e4b.gguf ~/models/gemma4-e4b-q4km.gguf Q4_K_M
-
-# Convert and quantize the vision projector (for screen description)
-python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --mmproj --outfile ~/models/mmproj-gemma4-e4b.gguf
-~/llama.cpp/build/bin/llama-quantize ~/models/mmproj-gemma4-e4b.gguf ~/models/mmproj-gemma4-e4b-q8.gguf Q8_0
-```
-
-#### Start the server
-
-```bash
-./start_llama_server.sh          # default: E2B
-./start_llama_server.sh e4b      # E4B variant
+cd ~/anthony
+./build_llama.sh        # auto-detects CUDA / ROCm / Vulkan / CPU
+./download_model.sh     # downloads Gemma 4 E2B QAT from Unsloth (no login required)
+./download_model.sh -m e4b  # or E4B for higher quality (larger)
 ```
 
 The orchestrator auto-starts llama-server if it's not already running. To change model paths or GPU settings, edit the `LLAMA_SERVER_CONFIG` section in `orchestrator.py`.
