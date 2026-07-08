@@ -5,3 +5,12 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: circular-imports
+        name: circular-imports
+        entry: python tools/check_circular_imports.py
+        language: python
+        additional_dependencies: [circular-import-detector]
+        types: [python]
+        pass_filenames: true
