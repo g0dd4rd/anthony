@@ -5,7 +5,7 @@ import time
 import webcolors
 
 import utils
-from orchestrator import LLAMA_SOCKET_PATH, post_unix
+from uds_http import LLAMA_SOCKET_PATH, post_unix
 from utils import log_and_print
 from voice_io import listen_and_transcribe, speak
 

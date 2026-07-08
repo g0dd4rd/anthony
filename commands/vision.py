@@ -5,7 +5,7 @@ import os
 import webcolors
 
 from commands import _get_friendly_app_name, _mcp_client, step
-from orchestrator import LLAMA_SOCKET_PATH, post_unix
+from uds_http import LLAMA_SOCKET_PATH, post_unix
 
 
 def _call_vision(system_prompt, user_prompt, img_base64):
