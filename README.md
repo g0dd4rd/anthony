@@ -18,68 +18,16 @@ Anthony listens to natural voice commands and controls the GNOME desktop -- mana
 git clone https://github.com/g0dd4rd/anthony.git ~/anthony
 cd ~/anthony
 ./install.sh
+./build_llama.sh
+./download_model.sh
 ./orchestrator.py
 ```
 
 The install script handles system packages, Python dependencies, the Piper voice model, and anthony-mcp setup. First run downloads the Whisper STT model (~1.5GB) and Silero VAD (~2MB) automatically.
 
-## LLM Setup (Gemma 4 via llama.cpp)
+`build_llama.sh` clones and builds llama.cpp with auto-detected GPU support (CUDA, ROCm, Vulkan, or CPU). `download_model.sh` downloads the Gemma 4 E2B model and vision projector (~3.4GB total) from Unsloth -- no Hugging Face login required. Run `./download_model.sh -m e4b` for the larger E4B variant, or `./download_model.sh --help` for all options.
 
-Anthony uses Gemma 4 as its LLM for conversation mode and vision (screen description). The model runs locally via llama-server with Vulkan GPU acceleration.
-
-### 1. Build llama.cpp
-
-```bash
-git clone https://github.com/ggerganov/llama.cpp.git ~/llama.cpp
-cd ~/llama.cpp
-cmake -B build -DGGML_VULKAN=ON
-cmake --build build --config Release -j$(nproc)
-```
-
-### 2. Download and convert Gemma 4
-
-Download a Gemma 4 model from [Hugging Face](https://huggingface.co/google) (safetensors format). Two recommended variants:
-
-| Variant | Size | Quantization | Speed | Use case |
-|---------|------|-------------|-------|----------|
-| **Gemma 4 E2B** | ~3GB | Q8_0 | ~12-15 tok/s | Faster, recommended for most setups |
-| **Gemma 4 E4B** | ~5GB | Q4_K_M | ~6-7 tok/s | Higher quality, needs more VRAM |
-
-Convert the downloaded model to GGUF format:
-
-```bash
-mkdir -p ~/models
-
-# Convert the base model
-python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --outfile ~/models/gemma4-e4b.gguf
-
-# Quantize (Q4_K_M for E4B, Q8_0 for E2B)
-~/llama.cpp/build/bin/llama-quantize ~/models/gemma4-e4b.gguf ~/models/gemma4-e4b-q4km.gguf Q4_K_M
-```
-
-### 3. Vision projector
-
-Gemma 4 supports vision (screen description). Convert the vision projector separately:
-
-```bash
-python3 ~/llama.cpp/convert_hf_to_gguf.py <model_dir> --mmproj --outfile ~/models/mmproj-gemma4-e4b.gguf
-
-# Quantize the projector (Q8_0 preserves quality)
-~/llama.cpp/build/bin/llama-quantize ~/models/mmproj-gemma4-e4b.gguf ~/models/mmproj-gemma4-e4b-q8.gguf Q8_0
-```
-
-### 4. Start llama-server
-
-```bash
-./start_llama_server.sh          # default: E2B variant
-./start_llama_server.sh e4b      # E4B variant (slower, higher quality)
-```
-
-The orchestrator auto-starts llama-server if it's not already running. The server listens on port 8081. You can verify it's working with:
-
-```bash
-curl http://127.0.0.1:8081/health
-```
+The orchestrator auto-starts llama-server if it's not already running.
 
 ## Usage
 
