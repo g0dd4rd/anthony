@@ -55,9 +55,6 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 import argparse
 import asyncio
-import http.client
-import json
-import socket as socket_mod
 import subprocess
 import threading
 import time
@@ -119,8 +116,7 @@ logger = utils.logger
 # API: OpenAI-compatible HTTP endpoint
 # ========================================
 
-_SOCKET_DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"), "anthony")
-LLAMA_SOCKET_PATH = os.path.join(_SOCKET_DIR, "llama.sock")
+from uds_http import _SOCKET_DIR, LLAMA_SOCKET_PATH, get_unix, post_unix
 
 # Model name (for API requests - not used by llama-server but required for API format)
 MODEL_NAME = "gemma4-e4b-q4km"
@@ -143,43 +139,6 @@ LLAMA_SERVER_CONFIG = {
 # ========================================
 
 # ----------------------------------------
-# HTTP-over-Unix-Domain-Socket helpers
-# ----------------------------------------
-
-
-class _UnixHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, socket_path, timeout=120):
-        super().__init__("localhost", timeout=timeout)
-        self._socket_path = socket_path
-
-    def connect(self):
-        self.sock = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
-        self.sock.settimeout(self.timeout)
-        self.sock.connect(self._socket_path)
-
-
-def post_unix(socket_path, path, payload, timeout=120):
-    conn = _UnixHTTPConnection(socket_path, timeout=timeout)
-    body = json.dumps(payload).encode()
-    conn.request("POST", path, body=body, headers={"Content-Type": "application/json"})
-    resp = conn.getresponse()
-    data = resp.read().decode()
-    conn.close()
-    if resp.status >= 400:
-        raise ConnectionError(f"HTTP {resp.status}: {data}")
-    return json.loads(data)
-
-
-def _get_unix(socket_path, path, timeout=2):
-    conn = _UnixHTTPConnection(socket_path, timeout=timeout)
-    conn.request("GET", path)
-    resp = conn.getresponse()
-    data = resp.read().decode()
-    conn.close()
-    return resp.status, json.loads(data)
-
-
-# ----------------------------------------
 # llama-server Lifecycle Management
 # ----------------------------------------
 
@@ -190,7 +149,7 @@ _server_process = None
 def check_server_running():
     """Check if llama-server is responding on its Unix socket"""
     try:
-        status, data = _get_unix(LLAMA_SOCKET_PATH, "/health", timeout=2)
+        status, data = get_unix(LLAMA_SOCKET_PATH, "/health", timeout=2)
         return status == 200 and data.get("status") == "ok"
     except:
         return False
