@@ -109,29 +109,26 @@ logger = utils.logger
 # ========================================
 # 🎯 MODEL CONFIGURATION - LLAMA.CPP SERVER
 # ========================================
-# Using llama-server with Vulkan GPU acceleration (Intel Arc)
-#
-# Model: Gemma 4 E4B (8B parameters, Q4_K_M quantized, 5GB)
-# Vision: Enabled via mmproj (multimodal projector)
-# API: OpenAI-compatible HTTP endpoint
+# Supported backends: "vulkan", "cuda", "rocm", "openvino"
+# OpenVINO uses a separate build dir (build_ov/) and env vars for device selection.
 # ========================================
 
 from uds_http import _SOCKET_DIR, LLAMA_SOCKET_PATH, get_unix, post_unix
 
-# Model name (for API requests - not used by llama-server but required for API format)
 MODEL_NAME = "gemma4-e4b-q4km"
 
-# llama-server configuration
 LLAMA_SERVER_CONFIG = {
     "binary": os.path.expanduser("~/llama.cpp/build/bin/llama-server"),
-    "model": os.path.expanduser("~/models/gemma4-e4b-q4km.gguf"),
+    "model": os.path.expanduser("~/models/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf"),
     "socket_path": LLAMA_SOCKET_PATH,
     "ctx_size": 4096,
     "gpu_layers": 99,
     "device": "Vulkan0",
+    "backend": "vulkan",
+    "openvino_device": "GPU",
     "threads": 6,
     "parallel": 1,
-    "mmproj": os.path.expanduser("~/models/mmproj-gemma4-e4b-q8.gguf"),
+    "mmproj": os.path.expanduser("~/models/mmproj-e2b-bf16.gguf"),
 }
 
 # ========================================
@@ -183,6 +180,7 @@ def start_server():
     global _server_process
 
     config = LLAMA_SERVER_CONFIG
+    backend = config.get("backend", "vulkan")
 
     kill_server()
     os.makedirs(_SOCKET_DIR, mode=0o700, exist_ok=True)
@@ -193,10 +191,6 @@ def start_server():
         config["model"],
         "--ctx-size",
         str(config["ctx_size"]),
-        "--n-gpu-layers",
-        str(config["gpu_layers"]),
-        "--device",
-        config["device"],
         "--host",
         config["socket_path"],
         "--threads",
@@ -210,17 +204,28 @@ def start_server():
         config["mmproj"],
     ]
 
-    log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
-    log_and_print(f"[SERVER] Model: {config['model']}")
-    log_and_print(f"[SERVER] GPU: {config['device']} ({config['gpu_layers']} layers)")
+    env = os.environ.copy()
+
+    if backend == "openvino":
+        env["GGML_OPENVINO_DEVICE"] = config.get("openvino_device", "GPU")
+        log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
+        log_and_print(f"[SERVER] Model: {config['model']}")
+        log_and_print(f"[SERVER] Backend: OpenVINO ({env['GGML_OPENVINO_DEVICE']})")
+    else:
+        cmd += ["--n-gpu-layers", str(config["gpu_layers"]), "--device", config["device"]]
+        log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
+        log_and_print(f"[SERVER] Model: {config['model']}")
+        log_and_print(
+            f"[SERVER] Backend: {backend} ({config['device']}, {config['gpu_layers']} layers)"
+        )
 
     try:
-        # Start in background, detached from parent process
         _server_process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True,  # Detach from parent
+            start_new_session=True,
+            env=env,
         )
 
         # Wait for server to be ready (max 30 seconds)

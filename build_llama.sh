@@ -1,18 +1,39 @@
 #!/bin/bash
-# Build llama.cpp from source (auto-detects CUDA / ROCm / Vulkan GPU or builds CPU-only)
+# Build llama.cpp from source with GPU backend auto-detection or explicit selection.
 #
 # Usage:
-#   ./build_llama.sh           # clone + build
-#   ./build_llama.sh --update  # pull latest + rebuild
+#   ./build_llama.sh                        # auto-detect: CUDA > ROCm > Vulkan > CPU
+#   ./build_llama.sh --backend openvino     # build with OpenVINO (Intel CPU/GPU/NPU)
+#   ./build_llama.sh --backend vulkan       # build with Vulkan
+#   ./build_llama.sh --backend cuda         # build with CUDA
+#   ./build_llama.sh --backend rocm         # build with ROCm/HIP
+#   ./build_llama.sh --update               # pull latest llama.cpp + rebuild
+#   ./build_llama.sh --update --backend openvino  # update + rebuild with OpenVINO
 
 set -euo pipefail
 
 LLAMA_DIR="$HOME/llama.cpp"
-BUILD_DIR="$LLAMA_DIR/build"
 UPDATE=false
+BACKEND="auto"
 
-if [[ "${1:-}" == "--update" ]]; then
-    UPDATE=true
+for arg in "$@"; do
+    case "$arg" in
+        --update) UPDATE=true ;;
+        --backend)  :;; # value handled below
+        openvino|vulkan|cuda|rocm|auto)
+            BACKEND="$arg" ;;
+        *)
+            echo "Unknown argument: $arg"
+            echo "Usage: $0 [--update] [--backend auto|cuda|rocm|openvino|vulkan]"
+            exit 1 ;;
+    esac
+done
+
+# OpenVINO uses a separate build dir so both backends can coexist
+if [ "$BACKEND" = "openvino" ]; then
+    BUILD_DIR="$LLAMA_DIR/build_ov"
+else
+    BUILD_DIR="$LLAMA_DIR/build"
 fi
 
 # Build dependencies
@@ -41,45 +62,99 @@ elif [ "$UPDATE" = true ]; then
     git -C "$LLAMA_DIR" pull --ff-only
 fi
 
-# Detect GPU: CUDA > ROCm > Vulkan > CPU
 CMAKE_ARGS=()
 
-# CUDA (NVIDIA)
-if nvidia-smi &>/dev/null && command -v nvcc &>/dev/null; then
-    echo "CUDA GPU detected — building with CUDA support"
-    CMAKE_ARGS+=(-DGGML_CUDA=ON)
-elif nvidia-smi &>/dev/null && ! command -v nvcc &>/dev/null; then
-    echo "NVIDIA GPU detected but CUDA toolkit missing — installing..."
-    sudo dnf install -y cuda-nvcc cuda-cudart-devel libcublas-devel
-    if command -v nvcc &>/dev/null; then
-        echo "CUDA toolkit installed — building with CUDA support"
+if [ "$BACKEND" != "auto" ]; then
+    # Explicit backend selection
+    case "$BACKEND" in
+        cuda)
+            echo "Building with CUDA support (explicit)"
+            if ! command -v nvcc &>/dev/null; then
+                echo "CUDA toolkit not found — installing..."
+                sudo dnf install -y cuda-nvcc cuda-cudart-devel libcublas-devel
+            fi
+            CMAKE_ARGS+=(-DGGML_CUDA=ON)
+            ;;
+        rocm)
+            echo "Building with ROCm/HIP support (explicit)"
+            GFX_TARGET=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1)
+            if [ -z "$GFX_TARGET" ]; then
+                echo "Error: ROCm not found or no AMD GPU detected"
+                exit 1
+            fi
+            CMAKE_ARGS+=(-DGGML_HIP=ON -DAMDGPU_TARGETS="$GFX_TARGET")
+            ;;
+        openvino)
+            echo "Building with OpenVINO support"
+            # Find and source OpenVINO setupvars.sh
+            OV_SETUP=""
+            if [ -n "${INTEL_OPENVINO_DIR:-}" ] && [ -f "$INTEL_OPENVINO_DIR/setupvars.sh" ]; then
+                OV_SETUP="$INTEL_OPENVINO_DIR/setupvars.sh"
+            else
+                for candidate in /opt/intel/openvino_*/setupvars.sh; do
+                    if [ -f "$candidate" ]; then
+                        OV_SETUP="$candidate"
+                    fi
+                done
+            fi
+            if [ -z "$OV_SETUP" ]; then
+                echo "Error: OpenVINO not found."
+                echo "Install from: https://docs.openvino.ai/2024/get-started/install-openvino.html"
+                exit 1
+            fi
+            echo "Sourcing $OV_SETUP"
+            source "$OV_SETUP"
+            CMAKE_ARGS+=(-DGGML_OPENVINO=ON)
+            ;;
+        vulkan)
+            echo "Building with Vulkan support (explicit)"
+            if ! rpm -q vulkan-headers &>/dev/null; then
+                echo "Installing Vulkan development headers..."
+                sudo dnf install -y vulkan-headers vulkan-loader-devel
+            fi
+            CMAKE_ARGS+=(-DGGML_VULKAN=ON)
+            ;;
+    esac
+else
+    # Auto-detect: CUDA > ROCm > Vulkan > CPU
+
+    # CUDA (NVIDIA)
+    if nvidia-smi &>/dev/null && command -v nvcc &>/dev/null; then
+        echo "CUDA GPU detected — building with CUDA support"
         CMAKE_ARGS+=(-DGGML_CUDA=ON)
-    else
-        echo "CUDA toolkit install failed — falling back"
-    fi
-fi
-
-# ROCm/HIP (AMD)
-if [ ${#CMAKE_ARGS[@]} -eq 0 ] && command -v rocminfo &>/dev/null; then
-    GFX_TARGET=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1)
-    if [ -n "$GFX_TARGET" ]; then
-        echo "AMD ROCm GPU detected ($GFX_TARGET) — building with HIP support"
-        CMAKE_ARGS+=(-DGGML_HIP=ON -DAMDGPU_TARGETS="$GFX_TARGET")
-    fi
-fi
-
-# Vulkan (any GPU)
-if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
-    if vulkaninfo --summary 2>&1 | grep -q "deviceName" && ! vulkaninfo --summary 2>&1 | grep -q "PHYSICAL_DEVICE_TYPE_CPU"; then
-        echo "Vulkan GPU detected — building with Vulkan support"
-        CMAKE_ARGS+=(-DGGML_VULKAN=ON)
-
-        if ! rpm -q vulkan-headers &>/dev/null; then
-            echo "Installing Vulkan development headers..."
-            sudo dnf install -y vulkan-headers vulkan-loader-devel
+    elif nvidia-smi &>/dev/null && ! command -v nvcc &>/dev/null; then
+        echo "NVIDIA GPU detected but CUDA toolkit missing — installing..."
+        sudo dnf install -y cuda-nvcc cuda-cudart-devel libcublas-devel
+        if command -v nvcc &>/dev/null; then
+            echo "CUDA toolkit installed — building with CUDA support"
+            CMAKE_ARGS+=(-DGGML_CUDA=ON)
+        else
+            echo "CUDA toolkit install failed — falling back"
         fi
-    else
-        echo "No GPU detected — building CPU-only"
+    fi
+
+    # ROCm/HIP (AMD)
+    if [ ${#CMAKE_ARGS[@]} -eq 0 ] && command -v rocminfo &>/dev/null; then
+        GFX_TARGET=$(rocminfo 2>/dev/null | grep -oP 'gfx\d+' | head -1)
+        if [ -n "$GFX_TARGET" ]; then
+            echo "AMD ROCm GPU detected ($GFX_TARGET) — building with HIP support"
+            CMAKE_ARGS+=(-DGGML_HIP=ON -DAMDGPU_TARGETS="$GFX_TARGET")
+        fi
+    fi
+
+    # Vulkan (any GPU)
+    if [ ${#CMAKE_ARGS[@]} -eq 0 ]; then
+        if vulkaninfo --summary 2>&1 | grep -q "deviceName" && ! vulkaninfo --summary 2>&1 | grep -q "PHYSICAL_DEVICE_TYPE_CPU"; then
+            echo "Vulkan GPU detected — building with Vulkan support"
+            CMAKE_ARGS+=(-DGGML_VULKAN=ON)
+
+            if ! rpm -q vulkan-headers &>/dev/null; then
+                echo "Installing Vulkan development headers..."
+                sudo dnf install -y vulkan-headers vulkan-loader-devel
+            fi
+        else
+            echo "No GPU detected — building CPU-only"
+        fi
     fi
 fi
 
