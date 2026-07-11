@@ -29,34 +29,13 @@ Configuration:
 To change models, edit the MODEL CONFIGURATION section below
 """
 
-import os
-import sys
-
-# Ensure models are cached, then enable offline mode to avoid HuggingFace Hub checks
-from faster_whisper.utils import download_model as _dl_whisper
-
-try:
-    _dl_whisper("medium.en", local_files_only=True)
-except Exception:
-    print("[SYSTEM] Whisper model not cached, downloading (~1.5GB)...")
-    _dl_whisper("medium.en")
-
-from sentence_transformers import SentenceTransformer as _ST
-
-try:
-    _ST("all-MiniLM-L6-v2", device="cpu", local_files_only=True)
-except Exception:
-    print("[SYSTEM] Embedding model not cached, downloading (~90MB)...")
-    _ST("all-MiniLM-L6-v2", device="cpu")
-del _ST
-
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
-
 import argparse
 import asyncio
 import glob
+import logging
+import os
 import subprocess
+import sys
 import threading
 import time
 from queue import Queue
@@ -112,6 +91,10 @@ utils.setup_logging(args.log_dir)
 from utils import log_and_print
 
 logger = utils.logger
+
+# Skip HuggingFace Hub checks — models are installed by install.sh
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_OFFLINE"] = "1"
 
 # ========================================
 # 🎯 MODEL CONFIGURATION - LLAMA.CPP SERVER
@@ -475,13 +458,14 @@ class MCPClient:
 
     async def _connect_and_process(self):
         """Connect to MCP server and process commands"""
+        logging.getLogger("mcp").setLevel(logging.WARNING)
         server_params = StdioServerParameters(command="anthony-mcp", args=[], env=os.environ.copy())
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 self.session = session
-                log_and_print("[SYSTEM] MCP connected to anthony-mcp")
+                log_and_print("[SYSTEM] MCP connected to anthony-mcp", console=False)
 
                 while True:
                     if not self.command_queue.empty():
@@ -513,7 +497,7 @@ class MCPClient:
 mcp_client = MCPClient()
 
 # Initialize dialog handler (auto-checks/enables accessibility)
-log_and_print("[SYSTEM] Initializing dialog handler...")
+log_and_print("[SYSTEM] Initializing dialog handler...", console=False)
 dialog_handler = DialogHandler()
 
 # Voice I/O loaded from voice_io.py
@@ -657,7 +641,7 @@ from config.tool_schemas import TOOL_SCHEMAS
 tool_schema_full = TOOL_SCHEMAS
 tool_schema = tool_schema_full
 
-log_and_print(f"[SYSTEM] ✓ Consolidated tool schema: {len(tool_schema_full)} tools")
+log_and_print(f"[SYSTEM] ✓ Consolidated tool schema: {len(tool_schema_full)} tools", console=False)
 
 # ========================================
 # MODULE INITIALIZATION
@@ -727,7 +711,8 @@ command_matcher.init(
 live_app_list = get_installed_gui_apps()
 log_and_print(
     f"[SYSTEM] Found {live_app_list['count']} user-visible applications"
-    f" (samples: {', '.join(live_app_list['samples'][:3])})"
+    f" (samples: {', '.join(live_app_list['samples'][:3])})",
+    console=False,
 )
 
 
@@ -735,32 +720,9 @@ log_and_print(
 # Orchestrator Loop
 # ----------------------------------------
 def run_agent():
-    print("\n" + "=" * 60)
+    print("\nMode: 'switch to chat mode' / 'switch to command mode'")
     if PUSH_TO_TALK_MODE:
-        print("💬  CONVERSATIONAL Agentic OS - PUSH-TO-TALK MODE")
-    else:
-        print("💬  CONVERSATIONAL Agentic OS")
-    print("=" * 60)
-    print("✅ VAD - unlimited voice input")
-    print("✅ Safe close - never loses data without your consent")
-    print("✅ Dialog detection - reads options to you")
-    print("✅ Voice confirmation - you choose what to do")
-    print("⭐ Command mode (default) - desktop control")
-    print("⭐ Chat mode (optional) - ask questions, get help")
-    if PUSH_TO_TALK_MODE:
-        print("🎤 PUSH-TO-TALK - Press ENTER to speak\n")
-    else:
-        print()
-
-    print("Mode switching (starts in command mode):")
-    print("  • 'switch to chat mode' - switch to conversation")
-    print("  • 'switch to command mode' - back to commands")
-    print("  • 'clear history' - clear chat history")
-    if PUSH_TO_TALK_MODE:
-        print("\n💡 Tip: PTT mode prevents accidental triggering during presentations\n")
-    else:
-        print()
-
+        print("Push-to-talk: press ENTER to speak")
     logger.info(f"[SYSTEM] Banner displayed (PTT={PUSH_TO_TALK_MODE})")
 
     # Ensure GNOME Shell extension is enabled before starting MCP
@@ -790,18 +752,18 @@ def run_agent():
     except Exception as e:
         log_and_print(f"[SYSTEM] Could not check/enable extension: {e}", level="warning")
 
-    log_and_print("[SYSTEM] Starting MCP client...")
+    log_and_print("[SYSTEM] Starting MCP client...", console=False)
     mcp_client.start()
 
     # Build application index for natural language resolution
-    log_and_print("[SYSTEM] Building application index...")
+    log_and_print("[SYSTEM] Building application index...", console=False)
     build_app_index()
 
     # Health check: ensure automation extension is running and enabled
-    log_and_print("[SYSTEM] Checking automation health...")
+    log_and_print("[SYSTEM] Checking automation health...", console=False)
     health_ok, health_msg = check_automation_health(auto_enable=True)
     if health_ok:
-        log_and_print(f"[SYSTEM] ✓ {health_msg}")
+        log_and_print(f"[SYSTEM] ✓ {health_msg}", console=False)
     else:
         log_and_print(f"[SYSTEM] ⚠️  {health_msg}", level="warning")
         log_and_print(
@@ -813,22 +775,18 @@ def run_agent():
     conversation_history = []
 
     # Check audio health (mic + output)
-    log_and_print("[SYSTEM] Checking audio health...")
+    log_and_print("[SYSTEM] Checking audio health...", console=False)
     if not check_audio_health():
         log_and_print(
             "[SYSTEM] ⚠️  Audio issue detected — voice commands may not work", level="warning"
         )
 
     # Notify user that system is ready
-    log_and_print("[SYSTEM] ✓ Voice orchestrator ready")
+    log_and_print("[SYSTEM] ✓ Anthony is ready")
     if PUSH_TO_TALK_MODE:
-        print("\n" + "=" * 60)
-        print("🎤 PUSH-TO-TALK MODE ACTIVE")
-        print("=" * 60)
-        print("Press ENTER to speak a command")
-        print("Press Ctrl+C to exit\n")
+        print("Press ENTER to speak, Ctrl+C to exit\n")
     else:
-        speak("Voice orchestrator ready. Listening for commands.")
+        speak("Anthony is ready. Listening for commands.")
 
     try:
         while True:
@@ -902,7 +860,7 @@ def run_agent():
 
                 log_and_print(f"\n[Agent]: {answer}")
                 response_time = time.time() - response_start_time
-                log_and_print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s")
+                log_and_print(f"[TIMING] ⏱️  Response time: {response_time:.2f}s", console=False)
                 speak(answer)
 
             # Blank line before next prompt in PTT mode

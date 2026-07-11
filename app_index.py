@@ -26,7 +26,7 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
 namespace_names = list(namespaces.keys())
 namespace_descriptions = [namespaces[ns]["description"] for ns in namespace_names]
 namespace_embeddings = embedding_model.encode(namespace_descriptions, convert_to_tensor=True)
-log_and_print(f"[SYSTEM] Loaded embeddings for {len(namespace_names)} namespaces")
+log_and_print(f"[SYSTEM] Loaded embeddings for {len(namespace_names)} namespaces", console=False)
 
 # ----------------------------------------
 # Dependency injection (set via init())

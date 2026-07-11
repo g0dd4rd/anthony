@@ -39,7 +39,7 @@ def init_tts(engine="neural"):
             download_voice(model_name, Path(os.path.dirname(model_path)))
         log_and_print("[SYSTEM] Loading Piper neural voice...")
         _piper_voice = PiperVoice.load(model_path)
-        log_and_print("[SYSTEM] Piper voice ready.")
+        log_and_print("[SYSTEM] Piper voice ready.", console=False)
     else:
         log_and_print("[SYSTEM] TTS: espeak-ng + mbrola")
 
@@ -86,7 +86,7 @@ def speak(text: str):
         else:
             _speak_espeak(clean_text)
         elapsed = time.time() - synth_start
-        log_and_print(f"[TIMING] TTS ({_tts_engine}): {elapsed:.2f}s")
+        log_and_print(f"[TIMING] TTS ({_tts_engine}): {elapsed:.2f}s", console=False)
     except Exception as e:
         log_and_print(f"[SYSTEM] Voice error: {e}", level="error")
 
@@ -107,7 +107,7 @@ else:
     vad_model, vad_utils = torch.hub.load(
         repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False, onnx=True
     )
-log_and_print("[SYSTEM] VAD model loaded.")
+log_and_print("[SYSTEM] VAD model loaded.", console=False)
 
 VAD_THRESHOLD = 0.5
 SILENCE_DURATION = 0.5
@@ -171,7 +171,9 @@ def get_default_input_device():
         default_device_info = p.get_default_input_device_info()
         device_index = default_device_info["index"]
         device_name = default_device_info["name"]
-        log_and_print(f"[AUDIO] Using input device: {device_name} (index {device_index})")
+        log_and_print(
+            f"[AUDIO] Using input device: {device_name} (index {device_index})", console=False
+        )
         p.terminate()
         return device_index
     except Exception as e:
@@ -267,7 +269,9 @@ def listen_and_transcribe():
                             whisper_elapsed = time.time() - whisper_start
 
                             text = "".join([segment.text for segment in segments]).strip()
-                            log_and_print(f"⏱️  Whisper transcription: {whisper_elapsed:.2f}s")
+                            log_and_print(
+                                f"⏱️  Whisper transcription: {whisper_elapsed:.2f}s", console=False
+                            )
                             log_and_print(f'✅ You said: "{text}"\n')
                             return text
                         else:

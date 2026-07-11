@@ -64,7 +64,9 @@ def _build_command_embeddings():
     if patterns:
         _command_embeddings = _embedding_model.encode(patterns, convert_to_tensor=True)
         _command_entries_map = entry_indices
-        log_and_print(f"[MATCHER] Pre-computed embeddings for {len(patterns)} command patterns")
+        log_and_print(
+            f"[MATCHER] Pre-computed embeddings for {len(patterns)} command patterns", console=False
+        )
     else:
         _command_embeddings = None
         _command_entries_map = []
