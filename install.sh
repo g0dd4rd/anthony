@@ -7,6 +7,45 @@
 
 set -e  # Exit on error
 
+# Distro detection
+source /etc/os-release 2>/dev/null || true
+case "${ID:-}" in
+    fedora|rhel|centos) DISTRO="fedora" ;;
+    opensuse*|sles)     DISTRO="opensuse" ;;
+    ubuntu|debian|pop)  DISTRO="ubuntu" ;;
+    *)
+        echo "Unsupported distribution: ${ID:-unknown}"
+        exit 1 ;;
+esac
+
+pkg_name() {
+    case "$1:$DISTRO" in
+        portaudio-devel:ubuntu)       echo "libportaudio-dev" ;;
+        python3-devel:ubuntu)         echo "python3-dev" ;;
+        pipewire-utils:ubuntu)        echo "pipewire" ;;
+        vulkan-headers:ubuntu)        echo "vulkan-validationlayers-dev" ;;
+        vulkan-headers:opensuse)      echo "vulkan-devel" ;;
+        vulkan-loader-devel:ubuntu)   echo "libvulkan-dev" ;;
+        vulkan-loader-devel:opensuse) echo "" ;;
+        *)                            echo "$1" ;;
+    esac
+}
+
+pkg_check() {
+    case "$DISTRO" in
+        fedora|opensuse) rpm -q "$1" &>/dev/null ;;
+        ubuntu)          dpkg -s "$1" &>/dev/null 2>&1 ;;
+    esac
+}
+
+pkg_install() {
+    case "$DISTRO" in
+        fedora)   sudo dnf install -y "$@" ;;
+        opensuse) sudo zypper install -y "$@" ;;
+        ubuntu)   sudo apt install -y "$@" ;;
+    esac
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -81,42 +120,20 @@ print_header "Step 1: Installing System Packages"
 
 print_step "Checking for required system packages..."
 
+REQUIRED_PACKAGES=(git alsa-utils portaudio-devel python3-devel pipewire-utils playerctl espeak-ng)
+
 PACKAGES_TO_INSTALL=()
-
-if ! rpm -q git &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("git")
-fi
-
-if ! rpm -q alsa-utils &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("alsa-utils")
-fi
-
-if ! rpm -q portaudio-devel &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("portaudio-devel")
-fi
-
-if ! rpm -q python3-devel &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("python3-devel")
-fi
-
-# For volume control (PipeWire/PulseAudio)
-if ! rpm -q pipewire-utils &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("pipewire-utils")
-fi
-
-# For media control (play/pause/next/previous)
-if ! rpm -q playerctl &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("playerctl")
-fi
-
-# For synthetic TTS (espeak-ng + mbrola)
-if ! rpm -q espeak-ng &> /dev/null; then
-    PACKAGES_TO_INSTALL+=("espeak-ng")
-fi
+for pkg in "${REQUIRED_PACKAGES[@]}"; do
+    resolved=$(pkg_name "$pkg")
+    [ -z "$resolved" ] && continue
+    if ! pkg_check "$resolved"; then
+        PACKAGES_TO_INSTALL+=("$resolved")
+    fi
+done
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
     print_step "Installing: ${PACKAGES_TO_INSTALL[*]}"
-    sudo dnf install -y "${PACKAGES_TO_INSTALL[@]}"
+    pkg_install "${PACKAGES_TO_INSTALL[@]}"
     print_success "System packages installed"
 else
     print_success "All system packages already installed"

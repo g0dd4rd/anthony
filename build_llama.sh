@@ -12,6 +12,46 @@
 
 set -euo pipefail
 
+# Distro detection
+source /etc/os-release 2>/dev/null || true
+case "${ID:-}" in
+    fedora|rhel|centos) DISTRO="fedora" ;;
+    opensuse*|sles)     DISTRO="opensuse" ;;
+    ubuntu|debian|pop)  DISTRO="ubuntu" ;;
+    *)
+        echo "Unsupported distribution: ${ID:-unknown}"
+        exit 1 ;;
+esac
+
+pkg_name() {
+    case "$1:$DISTRO" in
+        gcc-c++:ubuntu)               echo "g++" ;;
+        vulkan-headers:ubuntu)        echo "vulkan-validationlayers-dev" ;;
+        vulkan-headers:opensuse)      echo "vulkan-devel" ;;
+        vulkan-loader-devel:ubuntu)   echo "libvulkan-dev" ;;
+        vulkan-loader-devel:opensuse) echo "" ;;
+        cuda-nvcc:ubuntu)             echo "nvidia-cuda-toolkit" ;;
+        cuda-cudart-devel:ubuntu)     echo "libcudart-dev" ;;
+        libcublas-devel:ubuntu)       echo "libcublas-dev" ;;
+        *)                            echo "$1" ;;
+    esac
+}
+
+pkg_check() {
+    case "$DISTRO" in
+        fedora|opensuse) rpm -q "$1" &>/dev/null ;;
+        ubuntu)          dpkg -s "$1" &>/dev/null 2>&1 ;;
+    esac
+}
+
+pkg_install() {
+    case "$DISTRO" in
+        fedora)   sudo dnf install -y "$@" ;;
+        opensuse) sudo zypper install -y "$@" ;;
+        ubuntu)   sudo apt install -y "$@" ;;
+    esac
+}
+
 LLAMA_DIR="$HOME/llama.cpp"
 UPDATE=false
 BACKEND="auto"
@@ -42,7 +82,7 @@ if ! command -v cmake &>/dev/null; then
     PACKAGES_TO_INSTALL+=("cmake")
 fi
 if ! command -v g++ &>/dev/null; then
-    PACKAGES_TO_INSTALL+=("gcc-c++")
+    PACKAGES_TO_INSTALL+=("$(pkg_name gcc-c++)")
 fi
 if ! command -v gcc &>/dev/null; then
     PACKAGES_TO_INSTALL+=("gcc")
@@ -50,7 +90,7 @@ fi
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
     echo "Installing build dependencies: ${PACKAGES_TO_INSTALL[*]}"
-    sudo dnf install -y "${PACKAGES_TO_INSTALL[@]}"
+    pkg_install "${PACKAGES_TO_INSTALL[@]}"
 fi
 
 # Clone or update
@@ -71,7 +111,7 @@ if [ "$BACKEND" != "auto" ]; then
             echo "Building with CUDA support (explicit)"
             if ! command -v nvcc &>/dev/null; then
                 echo "CUDA toolkit not found — installing..."
-                sudo dnf install -y cuda-nvcc cuda-cudart-devel libcublas-devel
+                pkg_install "$(pkg_name cuda-nvcc)" "$(pkg_name cuda-cudart-devel)" "$(pkg_name libcublas-devel)"
             fi
             CMAKE_ARGS+=(-DGGML_CUDA=ON)
             ;;
@@ -108,9 +148,13 @@ if [ "$BACKEND" != "auto" ]; then
             ;;
         vulkan)
             echo "Building with Vulkan support (explicit)"
-            if ! rpm -q vulkan-headers &>/dev/null; then
+            VK_HDR=$(pkg_name vulkan-headers)
+            if ! pkg_check "$VK_HDR"; then
                 echo "Installing Vulkan development headers..."
-                sudo dnf install -y vulkan-headers vulkan-loader-devel
+                VK_PKGS=("$VK_HDR")
+                VK_LDR=$(pkg_name vulkan-loader-devel)
+                [ -n "$VK_LDR" ] && VK_PKGS+=("$VK_LDR")
+                pkg_install "${VK_PKGS[@]}"
             fi
             CMAKE_ARGS+=(-DGGML_VULKAN=ON)
             ;;
@@ -124,7 +168,7 @@ else
         CMAKE_ARGS+=(-DGGML_CUDA=ON)
     elif nvidia-smi &>/dev/null && ! command -v nvcc &>/dev/null; then
         echo "NVIDIA GPU detected but CUDA toolkit missing — installing..."
-        sudo dnf install -y cuda-nvcc cuda-cudart-devel libcublas-devel
+        pkg_install "$(pkg_name cuda-nvcc)" "$(pkg_name cuda-cudart-devel)" "$(pkg_name libcublas-devel)"
         if command -v nvcc &>/dev/null; then
             echo "CUDA toolkit installed — building with CUDA support"
             CMAKE_ARGS+=(-DGGML_CUDA=ON)
@@ -148,9 +192,13 @@ else
             echo "Vulkan GPU detected — building with Vulkan support"
             CMAKE_ARGS+=(-DGGML_VULKAN=ON)
 
-            if ! rpm -q vulkan-headers &>/dev/null; then
+            VK_HDR=$(pkg_name vulkan-headers)
+            if ! pkg_check "$VK_HDR"; then
                 echo "Installing Vulkan development headers..."
-                sudo dnf install -y vulkan-headers vulkan-loader-devel
+                VK_PKGS=("$VK_HDR")
+                VK_LDR=$(pkg_name vulkan-loader-devel)
+                [ -n "$VK_LDR" ] && VK_PKGS+=("$VK_LDR")
+                pkg_install "${VK_PKGS[@]}"
             fi
         else
             echo "No GPU detected — building CPU-only"
