@@ -122,7 +122,7 @@ print_header "Step 1: Installing System Packages"
 
 print_step "Checking for required system packages..."
 
-REQUIRED_PACKAGES=(git alsa-utils portaudio-devel python3-devel pipewire-utils playerctl espeak-ng)
+REQUIRED_PACKAGES=(git gcc alsa-utils portaudio-devel python3-devel pipewire-utils playerctl espeak-ng)
 
 PACKAGES_TO_INSTALL=()
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
