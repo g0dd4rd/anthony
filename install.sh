@@ -62,7 +62,7 @@ print_header "Voice-Driven Orchestrator - Installation"
 
 echo "This script will install all dependencies for:"
 echo "  - Voice recognition (Whisper)"
-echo "  - Text-to-speech (Piper)"
+echo "  - Text-to-speech (Piper neural + espeak-ng/mbrola synthetic)"
 echo "  - Desktop automation (MCP)"
 echo "  - LLM tool calling (Gemma4 via llama-server)"
 echo "  - Volume & media control (PipeWire/PulseAudio, playerctl)"
@@ -107,6 +107,11 @@ fi
 # For media control (play/pause/next/previous)
 if ! rpm -q playerctl &> /dev/null; then
     PACKAGES_TO_INSTALL+=("playerctl")
+fi
+
+# For synthetic TTS (espeak-ng + mbrola)
+if ! rpm -q espeak-ng &> /dev/null; then
+    PACKAGES_TO_INSTALL+=("espeak-ng")
 fi
 
 if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
@@ -196,9 +201,42 @@ else
 fi
 
 # ========================================
-# 5. GNOME Accessibility
+# 5. MBROLA (synthetic TTS voice)
 # ========================================
-print_header "Step 5: Configuring GNOME Accessibility"
+print_header "Step 5: Installing MBROLA"
+
+if command -v mbrola &> /dev/null; then
+    print_success "mbrola already installed"
+else
+    print_step "Building mbrola from source..."
+    MBROLA_BUILD_DIR=$(mktemp -d)
+    git clone --depth 1 https://github.com/numediart/MBROLA.git "$MBROLA_BUILD_DIR/MBROLA"
+    make -C "$MBROLA_BUILD_DIR/MBROLA"
+    sudo cp "$MBROLA_BUILD_DIR/MBROLA/Bin/mbrola" /usr/local/bin/mbrola
+    rm -rf "$MBROLA_BUILD_DIR"
+    print_success "mbrola installed"
+fi
+
+MBROLA_VOICE_DIR="/usr/share/mbrola/us1"
+if [ -f "$MBROLA_VOICE_DIR/us1" ]; then
+    print_success "mbrola us1 voice already installed"
+else
+    print_step "Downloading mbrola us1 voice..."
+    sudo mkdir -p "$MBROLA_VOICE_DIR"
+    MBROLA_VOICES_DIR=$(mktemp -d)
+    git clone --depth 1 --filter=blob:none --sparse https://github.com/numediart/MBROLA-voices.git "$MBROLA_VOICES_DIR"
+    cd "$MBROLA_VOICES_DIR"
+    git sparse-checkout set data/us1
+    sudo cp data/us1/us1 "$MBROLA_VOICE_DIR/us1"
+    cd "$HOME/anthony"
+    rm -rf "$MBROLA_VOICES_DIR"
+    print_success "mbrola us1 voice installed"
+fi
+
+# ========================================
+# 6. GNOME Accessibility
+# ========================================
+print_header "Step 6: Configuring GNOME Accessibility"
 
 ACCESSIBILITY=$(gsettings get org.gnome.desktop.interface toolkit-accessibility)
 
@@ -212,9 +250,9 @@ else
 fi
 
 # ========================================
-# 6. Verification
+# 7. Verification
 # ========================================
-print_header "Step 6: Verifying Installation"
+print_header "Step 7: Verifying Installation"
 
 VERIFICATION_FAILED=0
 
@@ -226,6 +264,8 @@ check_command "anthony-mcp" || VERIFICATION_FAILED=1
 check_command "aplay" || VERIFICATION_FAILED=1
 check_command "pactl" || VERIFICATION_FAILED=1
 check_command "playerctl" || VERIFICATION_FAILED=1
+check_command "espeak-ng" || VERIFICATION_FAILED=1
+check_command "mbrola" || VERIFICATION_FAILED=1
 
 echo ""
 print_step "Checking Python modules..."
@@ -248,6 +288,15 @@ if [ -f "$PIPER_MODEL_FILE" ]; then
     print_success "Piper voice model exists"
 else
     print_error "Piper voice model missing"
+    VERIFICATION_FAILED=1
+fi
+
+echo ""
+print_step "Checking mbrola voice..."
+if [ -f "/usr/share/mbrola/us1/us1" ]; then
+    print_success "mbrola us1 voice exists"
+else
+    print_error "mbrola us1 voice missing"
     VERIFICATION_FAILED=1
 fi
 

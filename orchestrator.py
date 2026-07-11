@@ -87,6 +87,12 @@ parser.add_argument(
 parser.add_argument(
     "--log-dir", type=str, default=None, help="Directory for log files (default: ./logs/)"
 )
+parser.add_argument(
+    "--tts",
+    choices=["neural", "synthetic"],
+    default="neural",
+    help="TTS voice: neural (natural, slower startup) or synthetic (fast, robotic)",
+)
 args = parser.parse_args()
 
 # Global flags
@@ -393,7 +399,9 @@ log_and_print("[SYSTEM] Initializing dialog handler...")
 dialog_handler = DialogHandler()
 
 # Voice I/O loaded from voice_io.py
-from voice_io import check_audio_health, listen_and_transcribe, speak
+from voice_io import check_audio_health, init_tts, listen_and_transcribe, speak
+
+init_tts(args.tts)
 
 
 # ----------------------------------------
