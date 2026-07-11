@@ -78,6 +78,10 @@ print_warning() {
     echo -e "${YELLOW}⚠️${NC}  $1"
 }
 
+print_skip() {
+    echo -e "${YELLOW}—${NC} $1"
+}
+
 check_command() {
     if command -v "$1" &> /dev/null; then
         print_success "$1 is installed"
