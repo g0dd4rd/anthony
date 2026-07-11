@@ -192,7 +192,7 @@ print_success "All Python packages installed"
 # ========================================
 print_header "Step 3: Installing Anthony MCP Server"
 
-if ! "$VENV_DIR/bin/anthony-mcp" --help &> /dev/null 2>&1; then
+if [ ! -x "$VENV_DIR/bin/anthony-mcp" ]; then
     print_step "Installing anthony-mcp..."
 
     # Check if local development version exists
