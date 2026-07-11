@@ -264,19 +264,23 @@ else
 fi
 
 # ========================================
-# 6. GNOME Accessibility
+# 6. Accessibility
 # ========================================
-print_header "Step 6: Configuring GNOME Accessibility"
+print_header "Step 6: Configuring Accessibility"
 
-ACCESSIBILITY=$(gsettings get org.gnome.desktop.interface toolkit-accessibility)
+if [[ "${XDG_CURRENT_DESKTOP:-}" == *"GNOME"* ]] || [[ "${XDG_CURRENT_DESKTOP:-}" == *"KDE"* ]]; then
+    ACCESSIBILITY=$(gsettings get org.gnome.desktop.interface toolkit-accessibility 2>/dev/null || echo "false")
 
-if [ "$ACCESSIBILITY" != "true" ]; then
-    print_step "Enabling GNOME accessibility..."
-    gsettings set org.gnome.desktop.interface toolkit-accessibility true
-    print_success "Accessibility enabled"
-    print_warning "Note: You may need to log out and back in for full accessibility support"
+    if [ "$ACCESSIBILITY" != "true" ]; then
+        print_step "Enabling accessibility..."
+        gsettings set org.gnome.desktop.interface toolkit-accessibility true
+        print_success "Accessibility enabled"
+        print_warning "Note: You may need to log out and back in for full accessibility support"
+    else
+        print_success "Accessibility already enabled"
+    fi
 else
-    print_success "Accessibility already enabled"
+    print_skip "Accessibility configuration skipped (not GNOME/KDE)"
 fi
 
 # ========================================
@@ -340,15 +344,6 @@ if [ -f "/usr/share/mbrola/us1/us1" ]; then
     print_success "mbrola us1 voice exists"
 else
     print_error "mbrola us1 voice missing"
-    VERIFICATION_FAILED=1
-fi
-
-echo ""
-print_step "Checking GNOME accessibility..."
-if gsettings get org.gnome.desktop.interface toolkit-accessibility | grep -q "true"; then
-    print_success "GNOME accessibility enabled"
-else
-    print_error "GNOME accessibility not enabled"
     VERIFICATION_FAILED=1
 fi
 
