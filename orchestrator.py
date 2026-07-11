@@ -92,9 +92,20 @@ from utils import log_and_print
 
 logger = utils.logger
 
-# Skip HuggingFace Hub checks — models are installed by install.sh
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_HUB_OFFLINE"] = "1"
+# Skip HuggingFace Hub checks if models are already cached
+_hf_cache = os.path.expanduser("~/.cache/huggingface/hub")
+_whisper_cached = os.path.isdir(
+    os.path.join(_hf_cache, "models--Systran--faster-whisper-medium.en")
+)
+_st_cached = os.path.isdir(
+    os.path.join(_hf_cache, "models--sentence-transformers--all-MiniLM-L6-v2")
+)
+if _whisper_cached and _st_cached:
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
+else:
+    log_and_print("[SYSTEM] First run — downloading models (this may take a minute)...")
+del _hf_cache, _whisper_cached, _st_cached
 
 # ========================================
 # 🎯 MODEL CONFIGURATION - LLAMA.CPP SERVER
