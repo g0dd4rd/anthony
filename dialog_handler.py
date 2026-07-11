@@ -52,7 +52,7 @@ class DialogHandler:
                 print("[A11Y] ⚠️  NOTE: You may need to restart applications for full a11y support.")
                 print("[A11Y]      For best results, log out and log back in.")
             else:
-                print("[A11Y] ✅ Accessibility already enabled")
+                pass
 
         except Exception as e:
             print(f"[A11Y] ⚠️  Could not check/enable accessibility: {e}")
