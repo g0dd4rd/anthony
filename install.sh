@@ -224,7 +224,7 @@ PIPER_MODEL_FILE="$PIPER_MODEL_DIR/en_US-lessac-medium.onnx"
 
 if [ ! -f "$PIPER_MODEL_FILE" ]; then
     print_step "Downloading Piper voice model..."
-    python3 -m piper.download_voices --download-dir "$PIPER_MODEL_DIR" en_US-lessac-medium
+    "$VENV_DIR/bin/python3" -m piper.download_voices --download-dir "$PIPER_MODEL_DIR" en_US-lessac-medium
     print_success "Piper model downloaded"
 else
     print_success "Piper model already exists"
