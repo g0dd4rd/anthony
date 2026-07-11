@@ -470,7 +470,12 @@ class MCPClient:
     async def _connect_and_process(self):
         """Connect to MCP server and process commands"""
         logging.getLogger("mcp").setLevel(logging.WARNING)
-        server_params = StdioServerParameters(command="anthony-mcp", args=[], env=os.environ.copy())
+        _mcp_bin = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "anthony-mcp"
+        )
+        if not os.path.isfile(_mcp_bin):
+            _mcp_bin = "anthony-mcp"
+        server_params = StdioServerParameters(command=_mcp_bin, args=[], env=os.environ.copy())
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
