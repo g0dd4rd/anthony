@@ -23,6 +23,8 @@ pkg_name() {
         portaudio-devel:ubuntu)       echo "libportaudio-dev" ;;
         python3-devel:ubuntu)         echo "python3-dev" ;;
         python3-devel:opensuse)       echo "python3$(python3 --version | grep -oP '3\.\K[0-9]+')-devel" ;;
+        python3-gobject:ubuntu)       echo "python3-gi" ;;
+        python3-gobject:opensuse)     echo "python3$(python3 --version | grep -oP '3\.\K[0-9]+')-gobject" ;;
         pipewire-utils:ubuntu)        echo "pipewire" ;;
         pipewire-utils:opensuse)      echo "pipewire-tools" ;;
         vulkan-headers:ubuntu)        echo "vulkan-validationlayers-dev" ;;
@@ -126,7 +128,7 @@ print_header "Step 1: Installing System Packages"
 
 print_step "Checking for required system packages..."
 
-REQUIRED_PACKAGES=(git gcc make alsa-utils portaudio-devel python3-devel pipewire-utils playerctl espeak-ng)
+REQUIRED_PACKAGES=(git gcc make alsa-utils portaudio-devel python3-devel pipewire-utils playerctl espeak-ng at-spi2-core python3-gobject)
 
 PACKAGES_TO_INSTALL=()
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
@@ -154,7 +156,7 @@ VENV_DIR="$HOME/anthony/.venv"
 
 if [ ! -d "$VENV_DIR" ]; then
     print_step "Creating virtual environment..."
-    python3 -m venv "$VENV_DIR"
+    python3 -m venv --system-site-packages "$VENV_DIR"
     print_success "Virtual environment created at $VENV_DIR"
 else
     print_success "Virtual environment already exists"
