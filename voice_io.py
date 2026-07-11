@@ -12,34 +12,39 @@ import torch
 
 torch.backends.nnpack.enabled = False
 from faster_whisper import WhisperModel
-from piper.voice import PiperVoice
 
 from utils import log_and_print
 
 # ----------------------------------------
-# TTS - Neural Voice
+# TTS engine selection
 # ----------------------------------------
-PIPER_VOICE_NAME = "en_US-lessac-medium"
-PIPER_MODEL_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), f"{PIPER_VOICE_NAME}.onnx"
-)
+_tts_engine = "neural"
+_piper_voice = None
 
-if not os.path.isfile(PIPER_MODEL_PATH):
-    log_and_print("[SYSTEM] Voice model not found, downloading...")
-    from pathlib import Path
 
-    from piper.download_voices import download_voice
+def init_tts(engine="neural"):
+    global _tts_engine, _piper_voice
+    _tts_engine = engine
+    if engine == "neural":
+        from piper.voice import PiperVoice
 
-    download_voice(PIPER_VOICE_NAME, Path(os.path.dirname(PIPER_MODEL_PATH)))
-    log_and_print("[SYSTEM] Voice model downloaded.")
+        model_name = "en_US-lessac-medium"
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{model_name}.onnx")
+        if not os.path.isfile(model_path):
+            log_and_print("[SYSTEM] Voice model not found, downloading...")
+            from pathlib import Path
 
-log_and_print("[SYSTEM] Loading Neural Voice...")
-voice_model = PiperVoice.load(PIPER_MODEL_PATH)
-log_and_print("[SYSTEM] Voice ready.")
+            from piper.download_voices import download_voice
+
+            download_voice(model_name, Path(os.path.dirname(model_path)))
+        log_and_print("[SYSTEM] Loading Piper neural voice...")
+        _piper_voice = PiperVoice.load(model_path)
+        log_and_print("[SYSTEM] Piper voice ready.")
+    else:
+        log_and_print("[SYSTEM] TTS: espeak-ng + mbrola")
 
 
 def strip_markdown(text: str) -> str:
-    """Remove markdown formatting from text for TTS."""
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"__(.+?)__", r"\1", text)
     text = re.sub(r"\*(.+?)\*", r"\1", text)
@@ -51,24 +56,21 @@ def strip_markdown(text: str) -> str:
     return text
 
 
-_TTS_FILLERS = ["Okay,", "Done,", "Alright,", "Sure,"]
-_tts_filler_index = 0
+def _speak_espeak(text):
+    subprocess.run(
+        ["espeak-ng", "-v", "mb-us1", "-s", "160", "-p", "50", text],
+        check=True,
+    )
 
 
-def _pad_short_text(text: str) -> str:
-    """Pad short text with a filler prefix to avoid piper mispronunciation."""
-    global _tts_filler_index
-    if len(text.split()) < 5:
-        filler = _TTS_FILLERS[_tts_filler_index % len(_TTS_FILLERS)]
-        _tts_filler_index += 1
-        text = f"{filler} {text[0].lower()}{text[1:]}"
-    if not text.endswith((".", "!", "?")):
-        text += "."
-    return text
+def _speak_piper(text):
+    temp_path = "/tmp/agent_response.wav"
+    with wave.open(temp_path, "wb") as wav_file:
+        _piper_voice.synthesize_wav(text, wav_file)
+    subprocess.run(["aplay", "-q", temp_path], check=True)
 
 
 def speak(text: str):
-    """Converts text to neural speech and plays it."""
     log_and_print(f"\n[Agent]: {text}")
 
     if not text or text.strip() == "":
@@ -76,22 +78,15 @@ def speak(text: str):
         return
 
     clean_text = strip_markdown(text)
-    clean_text = _pad_short_text(clean_text)
 
-    temp_audio_path = "/tmp/agent_response.wav"
     try:
         synth_start = time.time()
-        with wave.open(temp_audio_path, "wb") as wav_file:
-            voice_model.synthesize_wav(clean_text, wav_file)
-        synth_elapsed = time.time() - synth_start
-
-        play_start = time.time()
-        subprocess.run(["aplay", "-q", temp_audio_path], check=True)
-        play_elapsed = time.time() - play_start
-
-        log_and_print(
-            f"[TIMING] TTS synthesis: {synth_elapsed:.2f}s, playback: {play_elapsed:.2f}s"
-        )
+        if _tts_engine == "neural":
+            _speak_piper(clean_text)
+        else:
+            _speak_espeak(clean_text)
+        elapsed = time.time() - synth_start
+        log_and_print(f"[TIMING] TTS ({_tts_engine}): {elapsed:.2f}s")
     except Exception as e:
         log_and_print(f"[SYSTEM] Voice error: {e}", level="error")
 
@@ -106,22 +101,21 @@ log_and_print("[SYSTEM] Loading Silero VAD model...")
 _vad_cache = os.path.join(torch.hub.get_dir(), "snakers4_silero-vad_master")
 if os.path.isdir(_vad_cache):
     vad_model, vad_utils = torch.hub.load(
-        repo_or_dir=_vad_cache, model="silero_vad", source="local", onnx=False
+        repo_or_dir=_vad_cache, model="silero_vad", source="local", onnx=True
     )
 else:
     vad_model, vad_utils = torch.hub.load(
-        repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False, onnx=False
+        repo_or_dir="snakers4/silero-vad", model="silero_vad", force_reload=False, onnx=True
     )
 log_and_print("[SYSTEM] VAD model loaded.")
 
 VAD_THRESHOLD = 0.5
-SILENCE_DURATION = 1.0
+SILENCE_DURATION = 0.5
 MIN_SPEECH_DURATION = 0.5
 PRE_SPEECH_BUFFER = 0.3
 
 
 def is_speech(audio_chunk, vad_model, rate=16000, threshold=0.5):
-    """Check if audio chunk contains speech using Silero VAD."""
     try:
         audio_int16 = np.frombuffer(audio_chunk, dtype=np.int16)
         audio_float32 = audio_int16.astype(np.float32) / 32768.0
@@ -133,7 +127,6 @@ def is_speech(audio_chunk, vad_model, rate=16000, threshold=0.5):
 
 
 def check_audio_health():
-    """Check mic and output state. Warns via TTS if mic is muted/unavailable."""
     try:
         result = subprocess.run(
             ["pactl", "get-sink-mute", "@DEFAULT_SINK@"], capture_output=True, text=True, timeout=5
@@ -173,7 +166,6 @@ def check_audio_health():
 
 
 def get_default_input_device():
-    """Get the current system default input device index."""
     try:
         p = pyaudio.PyAudio()
         default_device_info = p.get_default_input_device_info()
@@ -189,7 +181,6 @@ def get_default_input_device():
 
 
 def listen_and_transcribe():
-    """VAD-based continuous listening."""
     CHUNK = 512
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
@@ -251,18 +242,14 @@ def listen_and_transcribe():
                             stream.close()
                             p.terminate()
 
-                            temp_path = "/tmp/vad_recording.wav"
-                            p_temp = pyaudio.PyAudio()
-                            with wave.open(temp_path, "wb") as wf:
-                                wf.setnchannels(CHANNELS)
-                                wf.setsampwidth(p_temp.get_sample_size(FORMAT))
-                                wf.setframerate(RATE)
-                                wf.writeframes(b"".join(frames))
-                            p_temp.terminate()
+                            audio_data = (
+                                np.frombuffer(b"".join(frames), dtype=np.int16).astype(np.float32)
+                                / 32768.0
+                            )
 
                             whisper_start = time.time()
                             segments, info = whisper_model.transcribe(
-                                temp_path,
+                                audio_data,
                                 beam_size=5,
                                 temperature=0.2,
                                 word_timestamps=True,
