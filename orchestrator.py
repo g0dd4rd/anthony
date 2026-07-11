@@ -726,31 +726,32 @@ def run_agent():
     logger.info(f"[SYSTEM] Banner displayed (PTT={PUSH_TO_TALK_MODE})")
 
     # Ensure GNOME Shell extension is enabled before starting MCP
-    _ext_uuid = "desktop-automation@anthonymcp.github.io"
-    try:
-        _global_disabled = subprocess.run(
-            ["gsettings", "get", "org.gnome.shell", "disable-user-extensions"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if "true" in _global_disabled.stdout.lower():
-            log_and_print("[SYSTEM] User extensions globally disabled, enabling...")
-            subprocess.run(
-                ["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
+    if "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", ""):
+        _ext_uuid = "desktop-automation@anthonymcp.github.io"
+        try:
+            _global_disabled = subprocess.run(
+                ["gsettings", "get", "org.gnome.shell", "disable-user-extensions"],
+                capture_output=True,
+                text=True,
                 timeout=5,
             )
-            time.sleep(1)
+            if "true" in _global_disabled.stdout.lower():
+                log_and_print("[SYSTEM] User extensions globally disabled, enabling...")
+                subprocess.run(
+                    ["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
+                    timeout=5,
+                )
+                time.sleep(1)
 
-        _ext_check = subprocess.run(
-            ["gnome-extensions", "info", _ext_uuid], capture_output=True, text=True, timeout=5
-        )
-        if "Enabled: No" in _ext_check.stdout:
-            log_and_print("[SYSTEM] Enabling GNOME Shell extension...")
-            subprocess.run(["gnome-extensions", "enable", _ext_uuid], timeout=5)
-            time.sleep(1)
-    except Exception as e:
-        log_and_print(f"[SYSTEM] Could not check/enable extension: {e}", level="warning")
+            _ext_check = subprocess.run(
+                ["gnome-extensions", "info", _ext_uuid], capture_output=True, text=True, timeout=5
+            )
+            if "Enabled: No" in _ext_check.stdout:
+                log_and_print("[SYSTEM] Enabling GNOME Shell extension...")
+                subprocess.run(["gnome-extensions", "enable", _ext_uuid], timeout=5)
+                time.sleep(1)
+        except Exception as e:
+            log_and_print(f"[SYSTEM] Could not check/enable extension: {e}", level="warning")
 
     log_and_print("[SYSTEM] Starting MCP client...", console=False)
     mcp_client.start()

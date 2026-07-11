@@ -336,13 +336,17 @@ else
     print_warning "Vision projector not downloaded yet"
 fi
 
-EXT_UUID="desktop-automation@anthonymcp.github.io"
 EXT_OK=false
-if gnome-extensions info "$EXT_UUID" 2>/dev/null | grep -q "State: ENABLED"; then
-    print_success "GNOME Shell extension enabled"
-    EXT_OK=true
+if [[ "${XDG_CURRENT_DESKTOP:-}" == *"GNOME"* ]]; then
+    EXT_UUID="desktop-automation@anthonymcp.github.io"
+    if gnome-extensions info "$EXT_UUID" 2>/dev/null | grep -q "State: ENABLED"; then
+        print_success "GNOME Shell extension enabled"
+        EXT_OK=true
+    else
+        print_warning "GNOME Shell extension not active (may need log out/in)"
+    fi
 else
-    print_warning "GNOME Shell extension not active (may need log out/in)"
+    EXT_OK=true
 fi
 
 # ========================================
@@ -363,11 +367,13 @@ ALL_READY=true
 
 echo -e "  ${GREEN}✓${NC}  Dependencies installed"
 
-if [ "$EXT_OK" = true ]; then
-    echo -e "  ${GREEN}✓${NC}  GNOME Shell extension active"
-else
-    echo -e "  ${RED}✗${NC}  Log out and back in              ${YELLOW}(extension needs Shell restart)${NC}"
-    ALL_READY=false
+if [[ "${XDG_CURRENT_DESKTOP:-}" == *"GNOME"* ]]; then
+    if [ "$EXT_OK" = true ]; then
+        echo -e "  ${GREEN}✓${NC}  GNOME Shell extension active"
+    else
+        echo -e "  ${RED}✗${NC}  Log out and back in              ${YELLOW}(extension needs Shell restart)${NC}"
+        ALL_READY=false
+    fi
 fi
 
 if [ "$LLAMA_OK" = true ]; then
