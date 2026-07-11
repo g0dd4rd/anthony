@@ -82,35 +82,21 @@ else
 fi
 
 # ========================================
-# 2. Python packages
+# 2. Python virtual environment
 # ========================================
-print_header "Step 2: Python Packages"
+print_header "Step 2: Python Virtual Environment"
 
-PYTHON_PACKAGES=(
-    sounddevice
-    PyAudio
-    faster-whisper
-    piper-tts
-    mcp
-    torch
-    torchaudio
-    numpy
-    parse
-    sentence-transformers
-    requests
-    webcolors
-    dogtail
-)
-
-if confirm "Uninstall Python packages (${#PYTHON_PACKAGES[@]} packages)?"; then
-    for pkg in "${PYTHON_PACKAGES[@]}"; do
-        if python3 -m pip show "$pkg" &>/dev/null; then
-            python3 -m pip uninstall -y "$pkg" 2>/dev/null || true
-            print_done "Removed $pkg"
-        fi
-    done
+VENV_DIR="$SCRIPT_DIR/.venv"
+if [ -d "$VENV_DIR" ]; then
+    VENV_SIZE=$(du -sh "$VENV_DIR" 2>/dev/null | cut -f1)
+    if confirm "Remove Python virtual environment ($VENV_SIZE)?"; then
+        rm -rf "$VENV_DIR"
+        print_done "Virtual environment removed"
+    else
+        print_skip "Virtual environment kept"
+    fi
 else
-    print_skip "Python packages kept"
+    print_done "No virtual environment found"
 fi
 
 # ========================================
@@ -119,11 +105,6 @@ fi
 print_header "Step 3: Anthony MCP"
 
 if confirm "Uninstall anthony-mcp?"; then
-    if python3 -m pip show anthony-mcp &>/dev/null; then
-        python3 -m pip uninstall -y anthony-mcp 2>/dev/null || true
-        print_done "anthony-mcp pip package removed"
-    fi
-
     EXTENSION_UUID="desktop-automation@anthonymcp.github.io"
     EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
     if [ -e "$EXTENSION_DIR" ]; then

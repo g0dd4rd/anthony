@@ -89,7 +89,7 @@ check_command() {
 }
 
 check_python_module() {
-    if python3 -c "import $1" &> /dev/null; then
+    if "$VENV_DIR/bin/python3" -c "import $1" &> /dev/null; then
         print_success "Python module '$1' is installed"
         return 0
     else
@@ -142,13 +142,25 @@ else
 fi
 
 # ========================================
-# 2. Python Packages
+# 2. Python Virtual Environment + Packages
 # ========================================
 print_header "Step 2: Installing Python Packages"
 
+VENV_DIR="$HOME/anthony/.venv"
+
+if [ ! -d "$VENV_DIR" ]; then
+    print_step "Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+    print_success "Virtual environment created at $VENV_DIR"
+else
+    print_success "Virtual environment already exists"
+fi
+
+# Use venv pip for all Python installs
+PIP="$VENV_DIR/bin/pip"
+
 print_step "Installing Python dependencies..."
 
-# Install packages one by one to better track progress
 PYTHON_PACKAGES=(
     "sounddevice"
     "pyaudio"
@@ -167,7 +179,7 @@ PYTHON_PACKAGES=(
 
 for pkg in "${PYTHON_PACKAGES[@]}"; do
     print_step "Installing $pkg..."
-    pip install --quiet "$pkg" || {
+    "$PIP" install --quiet "$pkg" || {
         print_error "Failed to install $pkg"
         exit 1
     }
@@ -180,21 +192,20 @@ print_success "All Python packages installed"
 # ========================================
 print_header "Step 3: Installing Anthony MCP Server"
 
-if ! command -v anthony-mcp &> /dev/null; then
+if ! "$VENV_DIR/bin/anthony-mcp" --help &> /dev/null 2>&1; then
     print_step "Installing anthony-mcp..."
 
     # Check if local development version exists
     if [ -d "$HOME/anthony-mcp" ]; then
         print_step "Found local anthony-mcp, installing from source..."
-        cd "$HOME/anthony-mcp"
-        ./install.sh
+        "$PIP" install -e "$HOME/anthony-mcp/mcp-server"
         print_success "anthony-mcp installed from local source"
     else
         print_step "Cloning anthony-mcp from GitHub..."
         cd "$HOME"
         git clone https://github.com/g0dd4rd/anthony-mcp.git
         cd anthony-mcp
-        ./install.sh
+        "$PIP" install -e "$HOME/anthony-mcp/mcp-server"
         print_success "anthony-mcp installed from GitHub"
     fi
 
@@ -277,14 +288,27 @@ VERIFICATION_FAILED=0
 
 print_step "Checking system commands..."
 check_command "python3" || VERIFICATION_FAILED=1
-check_command "pip" || VERIFICATION_FAILED=1
 check_command "git" || VERIFICATION_FAILED=1
-check_command "anthony-mcp" || VERIFICATION_FAILED=1
 check_command "aplay" || VERIFICATION_FAILED=1
 check_command "pactl" || VERIFICATION_FAILED=1
 check_command "playerctl" || VERIFICATION_FAILED=1
 check_command "espeak-ng" || VERIFICATION_FAILED=1
 check_command "mbrola" || VERIFICATION_FAILED=1
+
+echo ""
+print_step "Checking virtual environment..."
+if [ -x "$VENV_DIR/bin/python3" ]; then
+    print_success "Virtual environment OK"
+else
+    print_error "Virtual environment missing"
+    VERIFICATION_FAILED=1
+fi
+if [ -x "$VENV_DIR/bin/anthony-mcp" ]; then
+    print_success "anthony-mcp installed in venv"
+else
+    print_error "anthony-mcp not found in venv"
+    VERIFICATION_FAILED=1
+fi
 
 echo ""
 print_step "Checking Python modules..."
@@ -412,14 +436,14 @@ fi
 echo ""
 if [ "$ALL_READY" = true ]; then
     echo -e "  ${GREEN}All set!${NC} Run:"
-    echo -e "    ${GREEN}./orchestrator.py${NC}"
+    echo -e "    ${GREEN}./anthony.sh${NC}"
 else
     echo "  First run will also download:"
     echo "    - Whisper medium.en (~1.5GB)"
     echo "    - Silero VAD (~2MB)"
     echo ""
     echo -e "  When all steps show ${GREEN}✓${NC}, run:"
-    echo -e "    ${GREEN}./orchestrator.py${NC}"
+    echo -e "    ${GREEN}./anthony.sh${NC}"
 fi
 echo ""
 exit 0
