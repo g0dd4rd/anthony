@@ -87,6 +87,12 @@ parser.add_argument(
 parser.add_argument(
     "--log-dir", type=str, default=None, help="Directory for log files (default: ./logs/)"
 )
+parser.add_argument(
+    "--input",
+    choices=["mic", "ibus"],
+    default="mic",
+    help="Input source: mic (built-in whisper) or ibus (ibus-speech-to-text via D-Bus)",
+)
 args = parser.parse_args()
 
 # Global flags
@@ -119,7 +125,7 @@ MODEL_NAME = "gemma4-e4b-q4km"
 
 LLAMA_SERVER_CONFIG = {
     "binary": os.path.expanduser("~/llama.cpp/build/bin/llama-server"),
-    "model": os.path.expanduser("~/models/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf"),
+    "model": os.path.expanduser("~/models/gemma4-e2b-q4km.gguf"),
     "socket_path": LLAMA_SOCKET_PATH,
     "ctx_size": 4096,
     "gpu_layers": 99,
@@ -395,6 +401,14 @@ dialog_handler = DialogHandler()
 # Voice I/O loaded from voice_io.py
 from voice_io import check_audio_health, listen_and_transcribe, speak
 
+if args.input == "ibus":
+    from dbus_input import start_dbus_listener, wait_for_command_text
+
+    start_dbus_listener()
+    get_input = wait_for_command_text
+else:
+    get_input = listen_and_transcribe
+
 
 # ----------------------------------------
 # Health Check & Auto-Recovery
@@ -561,7 +575,7 @@ conversation.init(call_llama_server, debug=DEBUG)
 # Initialize command router and LLM chain
 import command_router
 
-command_router.init(mcp_client, speak, listen_and_transcribe)
+command_router.init(mcp_client, speak, get_input)
 
 import llm_chain
 
@@ -573,7 +587,7 @@ import commands
 commands.init(
     mcp_client,
     speak,
-    listen_and_transcribe,
+    get_input,
     smart_match_window,
     get_friendly_app_name,
     dialog_handler,
@@ -681,16 +695,24 @@ def run_agent():
     current_mode = "command"  # Start in command mode (explicit switching only)
     conversation_history = []
 
-    # Check audio health (mic + output)
-    log_and_print("[SYSTEM] Checking audio health...")
-    if not check_audio_health():
-        log_and_print(
-            "[SYSTEM] ⚠️  Audio issue detected — voice commands may not work", level="warning"
-        )
+    # Check audio health (mic + output) — skip for ibus input
+    if args.input != "ibus":
+        log_and_print("[SYSTEM] Checking audio health...")
+        if not check_audio_health():
+            log_and_print(
+                "[SYSTEM] ⚠️  Audio issue detected — voice commands may not work", level="warning"
+            )
 
     # Notify user that system is ready
     log_and_print("[SYSTEM] ✓ Voice orchestrator ready")
-    if PUSH_TO_TALK_MODE:
+    if args.input == "ibus":
+        print("\n" + "=" * 60)
+        print("IBUS INPUT MODE ACTIVE")
+        print("=" * 60)
+        print("Say 'command mode' in ibus-stt to send text here")
+        print("Press Ctrl+C to exit\n")
+        speak("Voice orchestrator ready. Waiting for ibus input.")
+    elif PUSH_TO_TALK_MODE:
         print("\n" + "=" * 60)
         print("🎤 PUSH-TO-TALK MODE ACTIVE")
         print("=" * 60)
@@ -710,7 +732,7 @@ def run_agent():
                     break
                 print("\n[PTT] 🟢 Listening activated...")
 
-            user_input = listen_and_transcribe()
+            user_input = get_input()
             if not user_input:
                 if PUSH_TO_TALK_MODE:
                     print("[PTT] ⚪ No speech detected, ready for next command\n")
