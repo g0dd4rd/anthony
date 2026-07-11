@@ -22,7 +22,9 @@ pkg_name() {
     case "$1:$DISTRO" in
         portaudio-devel:ubuntu)       echo "libportaudio-dev" ;;
         python3-devel:ubuntu)         echo "python3-dev" ;;
+        python3-devel:opensuse)       echo "python312-devel" ;;
         pipewire-utils:ubuntu)        echo "pipewire" ;;
+        pipewire-utils:opensuse)      echo "pipewire-tools" ;;
         vulkan-headers:ubuntu)        echo "vulkan-validationlayers-dev" ;;
         vulkan-headers:opensuse)      echo "vulkan-devel" ;;
         vulkan-loader-devel:ubuntu)   echo "libvulkan-dev" ;;
