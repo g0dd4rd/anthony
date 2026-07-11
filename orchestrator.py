@@ -671,6 +671,11 @@ if not ensure_server_running(force_restart=RESTART_SERVER):
     log_and_print("[SERVER] ❌ Failed to start llama-server. Exiting.")
     sys.exit(1)
 
+# Warmup: text benchmark (caches tok/s) + vision weight loading
+import hw_tier
+
+hw_tier.warmup(has_vision=LLAMA_SERVER_CONFIG["mmproj"] is not None)
+
 # Initialize facades with runtime dependencies
 from tools import facades
 
