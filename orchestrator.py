@@ -55,6 +55,7 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 import argparse
 import asyncio
+import glob
 import subprocess
 import threading
 import time
@@ -121,11 +122,42 @@ logger = utils.logger
 
 from uds_http import _SOCKET_DIR, LLAMA_SOCKET_PATH, get_unix, post_unix
 
-MODEL_NAME = "gemma4-e4b-q4km"
+MODELS_DIR = os.path.expanduser("~/models")
+
+
+def _find_model():
+    """Auto-detect model and mmproj from ~/models/."""
+    model_path = None
+    mmproj_path = None
+
+    if not os.path.isdir(MODELS_DIR):
+        return None, None
+
+    # Prefer the default download_model.sh output, then any gemma-4 gguf
+    candidates = sorted(glob.glob(os.path.join(MODELS_DIR, "gemma*4*E2B*.gguf")))
+    candidates = [c for c in candidates if "mmproj" not in c]
+    if candidates:
+        model_path = candidates[0]
+    else:
+        all_models = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
+        all_models = [m for m in all_models if "mmproj" not in m]
+        if all_models:
+            model_path = all_models[0]
+
+    # Find matching mmproj
+    if model_path:
+        mmproj_candidates = sorted(glob.glob(os.path.join(MODELS_DIR, "mmproj*.gguf")))
+        if mmproj_candidates:
+            mmproj_path = mmproj_candidates[0]
+
+    return model_path, mmproj_path
+
+
+_model_path, _mmproj_path = _find_model()
 
 LLAMA_SERVER_CONFIG = {
     "binary": os.path.expanduser("~/llama.cpp/build/bin/llama-server"),
-    "model": os.path.expanduser("~/models/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf"),
+    "model": _model_path,
     "socket_path": LLAMA_SOCKET_PATH,
     "ctx_size": 4096,
     "gpu_layers": 99,
@@ -134,7 +166,7 @@ LLAMA_SERVER_CONFIG = {
     "openvino_device": "GPU",
     "threads": 6,
     "parallel": 1,
-    "mmproj": os.path.expanduser("~/models/mmproj-e2b-bf16.gguf"),
+    "mmproj": _mmproj_path,
 }
 
 # ========================================
@@ -187,6 +219,13 @@ def start_server():
 
     config = LLAMA_SERVER_CONFIG
     backend = config.get("backend", "vulkan")
+
+    if not config["model"]:
+        log_and_print(
+            "[SERVER] No model found in ~/models/. Run ./download_model.sh first.",
+            level="error",
+        )
+        return False
 
     kill_server()
     os.makedirs(_SOCKET_DIR, mode=0o700, exist_ok=True)
@@ -298,7 +337,7 @@ def call_llama_server(messages, tools=None, temperature=0.0, max_tokens=200):
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "model": MODEL_NAME,
+        "model": os.path.basename(LLAMA_SERVER_CONFIG["model"] or "unknown"),
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
