@@ -309,27 +309,92 @@ else
     VERIFICATION_FAILED=1
 fi
 
+echo ""
+print_step "Checking external setup (warnings only)..."
+
+LLAMA_OK=false
+if [ -x "$HOME/llama.cpp/build/bin/llama-server" ]; then
+    print_success "llama-server binary found"
+    LLAMA_OK=true
+else
+    print_warning "llama-server not built yet"
+fi
+
+MODEL_OK=false
+if ls "$HOME/models/"*.gguf &> /dev/null; then
+    print_success "LLM model found"
+    MODEL_OK=true
+else
+    print_warning "LLM model not downloaded yet"
+fi
+
+MMPROJ_OK=false
+if ls "$HOME/models/mmproj-"*.gguf &> /dev/null; then
+    print_success "Vision projector found"
+    MMPROJ_OK=true
+else
+    print_warning "Vision projector not downloaded yet"
+fi
+
+EXT_UUID="desktop-automation@anthonymcp.github.io"
+EXT_OK=false
+if gnome-extensions info "$EXT_UUID" 2>/dev/null | grep -q "State: ENABLED"; then
+    print_success "GNOME Shell extension enabled"
+    EXT_OK=true
+else
+    print_warning "GNOME Shell extension not active (may need log out/in)"
+fi
+
 # ========================================
 # Final Report
 # ========================================
-print_header "Installation Complete"
+print_header "Next Steps"
 
-if [ $VERIFICATION_FAILED -eq 0 ]; then
-    print_success "All dependencies installed and verified!"
-    echo ""
-    echo "You can now run the orchestrator:"
-    echo -e "  ${GREEN}cd ~/anthony${NC}"
-    echo -e "  ${GREEN}./orchestrator.py${NC}"
-    echo ""
-    echo "First run will download additional models:"
-    echo "  - Whisper medium.en (~1.5GB)"
-    echo "  - Silero VAD (~2MB)"
-    echo ""
-    exit 0
-else
-    print_error "Some verification checks failed!"
-    echo ""
-    echo "Please review the errors above and fix them before running the orchestrator."
+if [ $VERIFICATION_FAILED -ne 0 ]; then
+    print_error "Some dependency checks failed! Review the errors above."
     echo ""
     exit 1
 fi
+
+print_success "All dependencies installed and verified!"
+echo ""
+
+ALL_READY=true
+
+echo -e "  ${GREEN}✓${NC}  Dependencies installed"
+
+if [ "$EXT_OK" = true ]; then
+    echo -e "  ${GREEN}✓${NC}  GNOME Shell extension active"
+else
+    echo -e "  ${RED}✗${NC}  Log out and back in              ${YELLOW}(extension needs Shell restart)${NC}"
+    ALL_READY=false
+fi
+
+if [ "$LLAMA_OK" = true ]; then
+    echo -e "  ${GREEN}✓${NC}  llama-server built"
+else
+    echo -e "  ${RED}✗${NC}  Build llama-server                ${YELLOW}→ ./build_llama.sh${NC}"
+    ALL_READY=false
+fi
+
+if [ "$MODEL_OK" = true ] && [ "$MMPROJ_OK" = true ]; then
+    echo -e "  ${GREEN}✓${NC}  LLM model downloaded"
+else
+    echo -e "  ${RED}✗${NC}  Download LLM model                ${YELLOW}→ ./download_model.sh${NC}"
+    ALL_READY=false
+fi
+
+echo ""
+if [ "$ALL_READY" = true ]; then
+    echo -e "  ${GREEN}All set!${NC} Run:"
+    echo -e "    ${GREEN}./orchestrator.py${NC}"
+else
+    echo "  First run will also download:"
+    echo "    - Whisper medium.en (~1.5GB)"
+    echo "    - Silero VAD (~2MB)"
+    echo ""
+    echo -e "  When all steps show ${GREEN}✓${NC}, run:"
+    echo -e "    ${GREEN}./orchestrator.py${NC}"
+fi
+echo ""
+exit 0

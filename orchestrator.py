@@ -55,6 +55,7 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 
 import argparse
 import asyncio
+import glob
 import subprocess
 import threading
 import time
@@ -121,21 +122,120 @@ logger = utils.logger
 
 from uds_http import _SOCKET_DIR, LLAMA_SOCKET_PATH, get_unix, post_unix
 
-MODEL_NAME = "gemma4-e4b-q4km"
+MODELS_DIR = os.path.expanduser("~/models")
 
-LLAMA_SERVER_CONFIG = {
-    "binary": os.path.expanduser("~/llama.cpp/build/bin/llama-server"),
-    "model": os.path.expanduser("~/models/gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf"),
-    "socket_path": LLAMA_SOCKET_PATH,
-    "ctx_size": 4096,
-    "gpu_layers": 99,
-    "device": "Vulkan0",
-    "backend": "vulkan",
-    "openvino_device": "GPU",
-    "threads": 6,
-    "parallel": 1,
-    "mmproj": os.path.expanduser("~/models/mmproj-e2b-bf16.gguf"),
-}
+
+def _find_model():
+    """Auto-detect model and mmproj from ~/models/."""
+    if not os.path.isdir(MODELS_DIR):
+        return None, None
+
+    model_path = None
+    candidates = sorted(glob.glob(os.path.join(MODELS_DIR, "gemma*4*E2B*.gguf")))
+    candidates = [c for c in candidates if "mmproj" not in c]
+    if candidates:
+        model_path = candidates[0]
+    else:
+        all_models = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
+        all_models = [m for m in all_models if "mmproj" not in m]
+        if all_models:
+            model_path = all_models[0]
+
+    mmproj_path = None
+    if model_path:
+        mmproj_candidates = sorted(glob.glob(os.path.join(MODELS_DIR, "mmproj*.gguf")))
+        if mmproj_candidates:
+            mmproj_path = mmproj_candidates[0]
+
+    return model_path, mmproj_path
+
+
+def _find_binary():
+    """Auto-detect llama-server binary path and infer backend from build dir."""
+    for subdir in ("build_ov", "build"):
+        path = os.path.expanduser(f"~/llama.cpp/{subdir}/bin/llama-server")
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path, "openvino" if subdir == "build_ov" else None
+    return None, None
+
+
+def _detect_gpu_backend():
+    """Detect GPU backend: cuda > rocm > vulkan > cpu. Mirrors build_llama.sh."""
+    try:
+        r = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
+        if r.returncode == 0:
+            return "cuda"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    try:
+        r = subprocess.run(["rocminfo"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and "gfx" in r.stdout:
+            return "rocm"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    try:
+        r = subprocess.run(["vulkaninfo", "--summary"], capture_output=True, text=True, timeout=5)
+        if "deviceName" in r.stdout and "PHYSICAL_DEVICE_TYPE_CPU" not in r.stdout:
+            return "vulkan"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return "cpu"
+
+
+def _detect_device(binary, backend):
+    """Query llama-server --list-devices for the first device matching the backend."""
+    if not binary or backend in ("cpu", "openvino"):
+        return None
+
+    try:
+        r = subprocess.run([binary, "--list-devices"], capture_output=True, text=True, timeout=5)
+        for line in r.stdout.splitlines():
+            name = line.strip().split(":")[0].strip()
+            if backend == "vulkan" and name.startswith("Vulkan"):
+                return name
+            if backend == "cuda" and name.isdigit():
+                return name
+            if backend == "rocm" and name.isdigit():
+                return name
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    if backend == "vulkan":
+        return "Vulkan0"
+    return "0"
+
+
+def _detect_threads():
+    """Use available cores minus 2, clamped to [2, 16]."""
+    cores = os.cpu_count() or 4
+    return max(2, min(cores - 2, 16))
+
+
+def _build_config():
+    """Auto-detect all llama-server configuration."""
+    binary, ov_hint = _find_binary()
+    backend = "openvino" if ov_hint == "openvino" else _detect_gpu_backend()
+    model_path, mmproj_path = _find_model()
+
+    return {
+        "binary": binary,
+        "model": model_path,
+        "socket_path": LLAMA_SOCKET_PATH,
+        "ctx_size": 4096,
+        "gpu_layers": 99 if backend != "cpu" else 0,
+        "device": _detect_device(binary, backend),
+        "backend": backend,
+        "openvino_device": "GPU",
+        "threads": _detect_threads(),
+        "parallel": 1,
+        "mmproj": mmproj_path,
+    }
+
+
+LLAMA_SERVER_CONFIG = _build_config()
 
 # ========================================
 # End of configuration
@@ -188,6 +288,20 @@ def start_server():
     config = LLAMA_SERVER_CONFIG
     backend = config.get("backend", "vulkan")
 
+    if not config["binary"]:
+        log_and_print(
+            "[SERVER] llama-server not found. Run ./build_llama.sh first.",
+            level="error",
+        )
+        return False
+
+    if not config["model"]:
+        log_and_print(
+            "[SERVER] No model found in ~/models/. Run ./download_model.sh first.",
+            level="error",
+        )
+        return False
+
     kill_server()
     os.makedirs(_SOCKET_DIR, mode=0o700, exist_ok=True)
 
@@ -206,21 +320,25 @@ def start_server():
         "--cont-batching",
         "--flash-attn",
         "auto",
-        "--mmproj",
-        config["mmproj"],
     ]
+
+    if config["mmproj"]:
+        cmd += ["--mmproj", config["mmproj"]]
 
     env = os.environ.copy()
 
+    log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
+    log_and_print(f"[SERVER] Model: {config['model']}")
+
     if backend == "openvino":
         env["GGML_OPENVINO_DEVICE"] = config.get("openvino_device", "GPU")
-        log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
-        log_and_print(f"[SERVER] Model: {config['model']}")
         log_and_print(f"[SERVER] Backend: OpenVINO ({env['GGML_OPENVINO_DEVICE']})")
+    elif backend == "cpu":
+        log_and_print(f"[SERVER] Backend: CPU ({config['threads']} threads)")
     else:
-        cmd += ["--n-gpu-layers", str(config["gpu_layers"]), "--device", config["device"]]
-        log_and_print(f"[SERVER] Starting llama-server on {config['socket_path']}...")
-        log_and_print(f"[SERVER] Model: {config['model']}")
+        cmd += ["--n-gpu-layers", str(config["gpu_layers"])]
+        if config["device"]:
+            cmd += ["--device", config["device"]]
         log_and_print(
             f"[SERVER] Backend: {backend} ({config['device']}, {config['gpu_layers']} layers)"
         )
@@ -298,7 +416,7 @@ def call_llama_server(messages, tools=None, temperature=0.0, max_tokens=200):
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "model": MODEL_NAME,
+        "model": os.path.basename(LLAMA_SERVER_CONFIG["model"] or "unknown"),
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
