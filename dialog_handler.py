@@ -100,8 +100,6 @@ class DialogHandler:
                 try:
                     alert_elements = app.findChildren(
                         lambda x: x.roleName in ["alert", "dialog"] and x.showing,
-                        recursive=True,
-                        showingOnly=True,
                     )
 
                     for elem in alert_elements:
@@ -135,7 +133,7 @@ class DialogHandler:
         try:
             # Find all labels in the dialog (contains message text)
             labels = dialog_element.findChildren(
-                lambda x: x.roleName == "label" and x.showing and x.text, recursive=True
+                lambda x: x.roleName == "label" and x.showing and x.text,
             )
 
             # Concatenate label texts to form message
@@ -149,8 +147,7 @@ class DialogHandler:
 
             # Find all buttons (roleName is 'button', not 'push button')
             buttons = dialog_element.findChildren(
-                lambda x: x.roleName == "button",  # Changed from 'push button'
-                recursive=True,
+                lambda x: x.roleName == "button",
             )
 
             for btn in buttons:

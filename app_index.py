@@ -65,11 +65,13 @@ def build_app_index():
             continue
         desktop_id = gio_app.get_id() or ""
         exec_name = os.path.basename(exec_path)
+        desktop_stem = desktop_id.removesuffix(".desktop")
         apps.append(
             {
                 "exec": exec_name,
                 "name": gio_app.get_display_name(),
                 "generic_name": gio_app.get_generic_name(),
+                "desktop_id": desktop_stem,
                 "keywords": list(gio_app.get_keywords())
                 if hasattr(gio_app, "get_keywords")
                 else [],
@@ -92,6 +94,9 @@ def build_app_index():
 
         app_name_map[exec_name.lower()] = exec_name
         app_names_only.add(exec_name.lower())
+
+        if app["desktop_id"]:
+            app_name_map[app["desktop_id"].lower()] = exec_name
 
         if app["name"]:
             app_name_map[app["name"].lower()] = exec_name
@@ -122,6 +127,9 @@ def build_app_index():
 
         app_name_map[exec_name.lower()] = exec_name
         app_names_only.add(exec_name.lower())
+
+        if app["desktop_id"]:
+            app_name_map[app["desktop_id"].lower()] = exec_name
 
         if app["name"]:
             app_name_map[app["name"].lower()] = exec_name
