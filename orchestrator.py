@@ -491,17 +491,22 @@ class MCPClient:
 
     def call_tool(self, tool_name: str, arguments: dict, timeout: float = 10.0) -> str:
         """Call MCP tool synchronously (blocks until result)"""
+        logger.debug(f"[MCP] call_tool: {tool_name}({arguments})")
         self.command_queue.put((tool_name, arguments))
 
         start_time = time.time()
         while self.result_queue.empty():
             if time.time() - start_time > timeout:
+                logger.debug(f"[MCP] {tool_name} timed out after {timeout}s")
                 return f"Error: Tool call timed out after {timeout}s"
             time.sleep(0.01)
 
+        elapsed = time.time() - start_time
         status, result = self.result_queue.get()
         if status == "error":
+            logger.debug(f"[MCP] {tool_name} error ({elapsed:.2f}s): {result}")
             return f"Error: {result}"
+        logger.debug(f"[MCP] {tool_name} OK ({elapsed:.2f}s): {str(result)[:200]}")
         return result
 
 
