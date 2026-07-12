@@ -1,4 +1,3 @@
-import locale
 import re
 import subprocess
 from datetime import datetime
@@ -36,8 +35,7 @@ def _dnd_warning():
     help_text="Get the current time",
 )
 def handle_time(context):
-    locale.setlocale(locale.LC_TIME, "")
-    return datetime.now().strftime("It is %c.")
+    return datetime.now().strftime("It's %I:%M %p.")
 
 
 @step(
@@ -50,8 +48,7 @@ def handle_time(context):
     help_text="Get the current date",
 )
 def handle_date(context):
-    locale.setlocale(locale.LC_TIME, "")
-    return datetime.now().strftime("It is %c.")
+    return datetime.now().strftime("It's %A, %B %-d.")
 
 
 @step(
@@ -62,8 +59,7 @@ def handle_date(context):
     help_text="Get the current day of the week",
 )
 def handle_day(context):
-    locale.setlocale(locale.LC_TIME, "")
-    return datetime.now().strftime("It is %c.")
+    return datetime.now().strftime("It's %A.")
 
 
 # --- Battery ---
