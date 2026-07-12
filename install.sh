@@ -95,7 +95,7 @@ check_command() {
 }
 
 check_python_module() {
-    if "$VENV_DIR/bin/python3" -c "import $1" &> /dev/null; then
+    if "$PYTHON" -c "import $1" &> /dev/null; then
         print_success "Python module '$1' is installed"
         return 0
     else
@@ -148,22 +148,29 @@ else
 fi
 
 # ========================================
-# 2. Python Virtual Environment + Packages
+# 2. Python Packages
 # ========================================
 print_header "Step 2: Installing Python Packages"
 
+# Detect PEP 668 (externally-managed environment)
+USE_VENV=false
 VENV_DIR="$HOME/anthony/.venv"
+PYTHON="python3"
+PIP="pip"
 
-if [ ! -d "$VENV_DIR" ]; then
-    print_step "Creating virtual environment..."
-    python3 -m venv --system-site-packages "$VENV_DIR"
-    print_success "Virtual environment created at $VENV_DIR"
-else
-    print_success "Virtual environment already exists"
+_stdlib=$(python3 -c "import sysconfig; print(sysconfig.get_path('stdlib'))" 2>/dev/null)
+if [ -f "${_stdlib}/EXTERNALLY-MANAGED" ] 2>/dev/null; then
+    USE_VENV=true
+    print_step "PEP 668 detected — using virtual environment"
+    if [ ! -d "$VENV_DIR" ]; then
+        python3 -m venv --system-site-packages "$VENV_DIR"
+        print_success "Virtual environment created"
+    else
+        print_success "Virtual environment already exists"
+    fi
+    PIP="$VENV_DIR/bin/pip"
+    PYTHON="$VENV_DIR/bin/python3"
 fi
-
-# Use venv pip for all Python installs
-PIP="$VENV_DIR/bin/pip"
 
 print_step "Installing Python dependencies..."
 
@@ -185,7 +192,7 @@ PYTHON_PACKAGES=(
 
 for pkg in "${PYTHON_PACKAGES[@]}"; do
     print_step "Installing $pkg..."
-    "$PIP" install --quiet "$pkg" || {
+    $PIP install --quiet "$pkg" || {
         print_error "Failed to install $pkg"
         exit 1
     }
@@ -198,20 +205,26 @@ print_success "All Python packages installed"
 # ========================================
 print_header "Step 3: Installing Anthony MCP Server"
 
-if [ ! -x "$VENV_DIR/bin/anthony-mcp" ]; then
+_mcp_installed=false
+if [ "$USE_VENV" = true ] && [ -x "$VENV_DIR/bin/anthony-mcp" ]; then
+    _mcp_installed=true
+elif [ "$USE_VENV" = false ] && command -v anthony-mcp &>/dev/null; then
+    _mcp_installed=true
+fi
+
+if [ "$_mcp_installed" = false ]; then
     print_step "Installing anthony-mcp..."
 
-    # Check if local development version exists
     if [ -d "$HOME/anthony-mcp" ]; then
         print_step "Found local anthony-mcp, installing from source..."
-        "$PIP" install -e "$HOME/anthony-mcp/mcp-server"
+        $PIP install -e "$HOME/anthony-mcp/mcp-server"
         print_success "anthony-mcp installed from local source"
     else
         print_step "Cloning anthony-mcp from GitHub..."
         cd "$HOME"
         git clone https://github.com/g0dd4rd/anthony-mcp.git
         cd anthony-mcp
-        "$PIP" install -e "$HOME/anthony-mcp/mcp-server"
+        $PIP install -e "$HOME/anthony-mcp/mcp-server"
         print_success "anthony-mcp installed from GitHub"
     fi
 
@@ -230,7 +243,7 @@ PIPER_MODEL_FILE="$PIPER_MODEL_DIR/en_US-lessac-medium.onnx"
 
 if [ ! -f "$PIPER_MODEL_FILE" ]; then
     print_step "Downloading Piper voice model..."
-    "$VENV_DIR/bin/python3" -m piper.download_voices --download-dir "$PIPER_MODEL_DIR" en_US-lessac-medium
+    "$PYTHON" -m piper.download_voices --download-dir "$PIPER_MODEL_DIR" en_US-lessac-medium
     print_success "Piper model downloaded"
 else
     print_success "Piper model already exists"
@@ -305,19 +318,28 @@ check_command "playerctl" || VERIFICATION_FAILED=1
 check_command "espeak-ng" || VERIFICATION_FAILED=1
 check_command "mbrola" || VERIFICATION_FAILED=1
 
-echo ""
-print_step "Checking virtual environment..."
-if [ -x "$VENV_DIR/bin/python3" ]; then
-    print_success "Virtual environment OK"
-else
-    print_error "Virtual environment missing"
-    VERIFICATION_FAILED=1
+if [ "$USE_VENV" = true ]; then
+    echo ""
+    print_step "Checking virtual environment..."
+    if [ -x "$VENV_DIR/bin/python3" ]; then
+        print_success "Virtual environment OK"
+    else
+        print_error "Virtual environment missing"
+        VERIFICATION_FAILED=1
+    fi
 fi
-if [ -x "$VENV_DIR/bin/anthony-mcp" ]; then
-    print_success "anthony-mcp installed in venv"
+
+echo ""
+print_step "Checking anthony-mcp..."
+if [ "$USE_VENV" = true ]; then
+    if [ -x "$VENV_DIR/bin/anthony-mcp" ]; then
+        print_success "anthony-mcp installed"
+    else
+        print_error "anthony-mcp not found"
+        VERIFICATION_FAILED=1
+    fi
 else
-    print_error "anthony-mcp not found in venv"
-    VERIFICATION_FAILED=1
+    check_command "anthony-mcp" || VERIFICATION_FAILED=1
 fi
 
 echo ""
@@ -434,17 +456,23 @@ else
     ALL_READY=false
 fi
 
+if [ "$USE_VENV" = true ]; then
+    RUN_CMD="./anthony.sh"
+else
+    RUN_CMD="./orchestrator.py"
+fi
+
 echo ""
 if [ "$ALL_READY" = true ]; then
     echo -e "  ${GREEN}All set!${NC} Run:"
-    echo -e "    ${GREEN}./anthony.sh${NC}"
+    echo -e "    ${GREEN}${RUN_CMD}${NC}"
 else
     echo "  First run will also download:"
     echo "    - Whisper medium.en (~1.5GB)"
     echo "    - Silero VAD (~2MB)"
     echo ""
     echo -e "  When all steps show ${GREEN}✓${NC}, run:"
-    echo -e "    ${GREEN}./anthony.sh${NC}"
+    echo -e "    ${GREEN}${RUN_CMD}${NC}"
 fi
 echo ""
 exit 0
