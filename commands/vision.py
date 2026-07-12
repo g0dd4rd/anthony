@@ -76,6 +76,20 @@ def handle_screenshot_area(context):
     help_text="Describe what is currently visible on screen",
 )
 def handle_describe_screen(context):
+    win_result = _mcp_client.call_tool("list_windows", {})
+    window_context = ""
+    if not win_result.startswith("Error"):
+        windows = json.loads(win_result)
+        parts = []
+        for w in windows:
+            name = _get_friendly_app_name(w.get("wmClass", ""))
+            state = "focused" if w.get("focused") else "minimized" if w.get("minimized") else ""
+            if w.get("maximized"):
+                state = (state + " maximized").strip()
+            parts.append(f"{name} ({state})" if state else name)
+        if parts:
+            window_context = f"Open windows: {', '.join(parts)}. "
+
     result = _mcp_client.call_tool("screenshot", {"include_cursor": False, "format": "path"})
     if result.startswith("Error"):
         return result
@@ -85,9 +99,9 @@ def handle_describe_screen(context):
         img_data = base64.b64encode(f.read()).decode("utf-8")
 
     description = _call_vision(
-        "Give a brief 2-3 sentence summary. Read the window title bar"
-        " to identify the application. Use plain text, no markdown.",
-        "What is on this screen?",
+        "Briefly describe what you see on this screen in 2-3 sentences."
+        " Use plain text, no markdown.",
+        f"{window_context}What is on this screen?",
         img_data,
     )
 
@@ -123,8 +137,13 @@ def handle_describe_window(context):
     if not focused:
         return "No focused window found."
 
+    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tiff")
+
     window_id = focused["id"]
+    title = focused.get("title", "")
     friendly = _get_friendly_app_name(focused.get("wmClass", ""))
+
+    is_image = any(title.lower().endswith(ext) for ext in _IMAGE_EXTS)
 
     result = _mcp_client.call_tool(
         "screenshot_window",
@@ -137,13 +156,22 @@ def handle_describe_window(context):
     with open(screenshot_path, "rb") as f:
         img_data = base64.b64encode(f.read()).decode("utf-8")
 
-    description = _call_vision(
-        "Describe what you see in this application window in plain text"
-        " without any formatting. Do not use markdown, asterisks, or"
-        " special characters. Answer directly.",
-        f"Describe the content shown in this {friendly} window.",
-        img_data,
-    )
+    if is_image:
+        system_prompt = (
+            "Describe what you see in this image in 2-3 sentences. Use plain text, no markdown."
+        )
+        user_prompt = "Describe what you see."
+    else:
+        system_prompt = (
+            "You are describing an application window to a user."
+            " State the application name (from the title bar),"
+            " what the user appears to be working on,"
+            " and the main content visible."
+            " Use plain text, no markdown. 2-3 sentences."
+        )
+        user_prompt = f"What is this {friendly} window showing?"
+
+    description = _call_vision(system_prompt, user_prompt, img_data)
 
     try:
         os.remove(screenshot_path)
