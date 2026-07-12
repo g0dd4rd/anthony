@@ -156,6 +156,20 @@ def _open_url(url):
     return f"Opening {url} in browser"
 
 
+def _focus_file_window(filename):
+    import time
+
+    time.sleep(0.5)
+    try:
+        win_list = json.loads(_mcp_client.call_tool("list_windows", {}))
+        for w in win_list:
+            if filename.lower() in w.get("title", "").lower():
+                _mcp_client.call_tool("focus_window", {"window_id": str(w["id"])})
+                return
+    except Exception:
+        pass
+
+
 def _open_file(path):
     import os
 
@@ -166,6 +180,7 @@ def _open_file(path):
             expanded = home_path
     if os.path.isfile(expanded):
         result = _mcp_client.call_tool("open_file", {"path": expanded})
+        _focus_file_window(os.path.basename(expanded))
         return result
 
     try:
@@ -176,6 +191,7 @@ def _open_file(path):
         if data.get("count", 0) > 0:
             found_path = data["results"][0]
             result = _mcp_client.call_tool("open_file", {"path": found_path})
+            _focus_file_window(os.path.basename(found_path))
             return result
     except Exception:
         pass
