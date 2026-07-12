@@ -64,7 +64,7 @@ def _speak_espeak(text):
 
 
 def _speak_piper(text):
-    temp_path = "/tmp/agent_response.wav"
+    temp_path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "anthony_tts.wav")
     with wave.open(temp_path, "wb") as wav_file:
         _piper_voice.synthesize_wav(text, wav_file)
     subprocess.run(["aplay", "-q", temp_path], check=True)
