@@ -776,16 +776,18 @@ def run_agent():
     log_and_print("[SYSTEM] Building application index...", console=False)
     build_app_index()
 
-    # Health check: ensure automation extension is running and enabled
-    log_and_print("[SYSTEM] Checking automation health...", console=False)
-    health_ok, health_msg = check_automation_health(auto_enable=True)
-    if health_ok:
-        log_and_print(f"[SYSTEM] ✓ {health_msg}", console=False)
-    else:
-        log_and_print(f"[SYSTEM] ⚠️  {health_msg}", level="warning")
-        log_and_print(
-            "[SYSTEM] Some features may not work until automation is enabled.", level="warning"
-        )
+    # Health check: ensure automation extension is running and enabled (GNOME only)
+    if "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", ""):
+        log_and_print("[SYSTEM] Checking automation health...", console=False)
+        health_ok, health_msg = check_automation_health(auto_enable=True)
+        if health_ok:
+            log_and_print(f"[SYSTEM] ✓ {health_msg}", console=False)
+        else:
+            log_and_print(f"[SYSTEM] ⚠️  {health_msg}", level="warning")
+            log_and_print(
+                "[SYSTEM] Some features may not work until automation is enabled.",
+                level="warning",
+            )
 
     # State variables
     current_mode = "command"  # Start in command mode (explicit switching only)
