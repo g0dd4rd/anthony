@@ -153,19 +153,27 @@ def _cycle_app_instance(app, direction=1):
     return f"Focused {label} {friendly} window"
 
 
-_INSTANCE_DIRECTIONS = {"next": 1, "other": 1, "previous": -1}
+@step(
+    "focus other {app}",
+    "focus next {app}",
+    "next {app} window",
+    "other {app} window",
+    "other {app}",
+    category="window",
+    help_text="Cycle focus to the next window of the same app",
+)
+def handle_focus_next_instance(context, app):
+    return _cycle_app_instance(app, 1)
 
 
 @step(
-    "focus {direction} {app}",
-    "{direction} {app} window",
-    "{direction} {app}",
+    "focus previous {app}",
+    "previous {app} window",
     category="window",
-    help_text="Cycle focus between multiple windows of the same app",
+    help_text="Cycle focus to the previous window of the same app",
 )
-def handle_focus_instance(context, direction, app):
-    d = _INSTANCE_DIRECTIONS.get(direction.lower(), 1)
-    return _cycle_app_instance(app, d)
+def handle_focus_previous_instance(context, app):
+    return _cycle_app_instance(app, -1)
 
 
 @step(
@@ -437,28 +445,19 @@ def handle_list_windows(context):
 
 # --- Window tiling ---
 
-_TILE_POSITIONS = {
-    "left half": lambda w, h: (0, 0, w // 2, h),
-    "right half": lambda w, h: (w // 2, 0, w // 2, h),
-    "top half": lambda w, h: (0, 0, w, h // 2),
-    "bottom half": lambda w, h: (0, h // 2, w, h // 2),
-    "top left": lambda w, h: (0, 0, w // 2, h // 2),
-    "top right": lambda w, h: (w // 2, 0, w // 2, h // 2),
-    "bottom left": lambda w, h: (0, h // 2, w // 2, h // 2),
-    "bottom right": lambda w, h: (w // 2, h // 2, w // 2, h // 2),
-    "left side": lambda w, h: (0, 0, w // 2, h),
-    "right side": lambda w, h: (w // 2, 0, w // 2, h),
-    "the left": lambda w, h: (0, 0, w // 2, h),
-    "the right": lambda w, h: (w // 2, 0, w // 2, h),
-    "left": lambda w, h: (0, 0, w // 2, h),
-    "right": lambda w, h: (w // 2, 0, w // 2, h),
-    "to left": lambda w, h: (0, 0, w // 2, h),
-    "to right": lambda w, h: (w // 2, 0, w // 2, h),
-    "to the left": lambda w, h: (0, 0, w // 2, h),
-    "to the right": lambda w, h: (w // 2, 0, w // 2, h),
-    "top": lambda w, h: (0, 0, w, h // 2),
-    "bottom": lambda w, h: (0, h // 2, w, h // 2),
-    "center": lambda w, h: (w // 4, h // 4, w // 2, h // 2),
+_TILE_KEYS = {
+    "left": "Super_L+Left",
+    "left half": "Super_L+Left",
+    "left side": "Super_L+Left",
+    "the left": "Super_L+Left",
+    "to left": "Super_L+Left",
+    "to the left": "Super_L+Left",
+    "right": "Super_L+Right",
+    "right half": "Super_L+Right",
+    "right side": "Super_L+Right",
+    "the right": "Super_L+Right",
+    "to right": "Super_L+Right",
+    "to the right": "Super_L+Right",
 }
 
 
@@ -468,9 +467,10 @@ def _tile_window(app_name, position):
             position = position[: -len(suffix)]
             break
     position = position.strip()
-    calc_fn = _TILE_POSITIONS.get(position)
-    if not calc_fn:
-        return f"Unknown position: {position}"
+
+    keys = _TILE_KEYS.get(position)
+    if not keys:
+        return f"Unknown tile position: {position}"
 
     if app_name:
         target, result = _find_window(app_name)
@@ -489,20 +489,9 @@ def _tile_window(app_name, position):
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", ""))
 
-    try:
-        mon_result = _mcp_client.call_tool("get_monitors", {})
-        monitors = json.loads(mon_result)
-        primary = next((m for m in monitors if m.get("primary")), monitors[0])
-        scr_w = primary["width"]
-        scr_h = primary["height"]
-    except Exception:
-        scr_w, scr_h = 1920, 1080
-
-    tx, ty, tw, th = calc_fn(scr_w, scr_h)
-    _mcp_client.call_tool(
-        "move_resize_window", {"window_id": window_id, "x": tx, "y": ty, "width": tw, "height": th}
-    )
-    return f"Moved {friendly} to the {position}"
+    _mcp_client.call_tool("focus_window", {"window_id": window_id})
+    _mcp_client.call_tool("key_combo", {"keys": keys})
+    return f"Snapped {friendly} to the {position}"
 
 
 @step(
