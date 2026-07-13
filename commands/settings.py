@@ -24,6 +24,8 @@ _SETTING_MAP = {
 )
 def handle_setting_on(context, setting):
     setting_lower = setting.lower().strip()
+    if setting_lower == "automation":
+        return _mcp_client.call_tool("set_enabled", {"enabled": True})
     mcp_setting = _SETTING_MAP.get(setting_lower)
     if not mcp_setting:
         return f"Unknown setting: {setting}"
@@ -40,6 +42,8 @@ def handle_setting_on(context, setting):
 )
 def handle_setting_off(context, setting):
     setting_lower = setting.lower().strip()
+    if setting_lower == "automation":
+        return _mcp_client.call_tool("set_enabled", {"enabled": False})
     mcp_setting = _SETTING_MAP.get(setting_lower)
     if not mcp_setting:
         return f"Unknown setting: {setting}"

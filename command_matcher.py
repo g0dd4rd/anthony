@@ -229,8 +229,6 @@ def execute(user_input, context=None):
 
         try:
             result = entry["handler"](context, **params)
-            if result and _is_automation_error(result):
-                result = _try_auto_recover(entry, context, params)
             if result:
                 context["last_result"] = result
                 results.append(result)
@@ -252,7 +250,12 @@ def execute(user_input, context=None):
     return results[-1] if len(results) == 1 else "\n".join(results)
 
 
-_AUTOMATION_ERROR_PHRASES = ("automation disabled", "not responding", "extension disabled")
+_AUTOMATION_ERROR_PHRASES = (
+    "automation is disabled",
+    "automation disabled",
+    "not responding",
+    "extension disabled",
+)
 
 
 def _is_automation_error(result):
