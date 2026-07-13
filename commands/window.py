@@ -126,17 +126,10 @@ def _find_all_matching_windows(app_name, windows):
     return [w for w in windows if w.get("wmClass", "") == target_wm]
 
 
-@step(
-    "focus other {app}",
-    "focus next {app}",
-    "next {app} window",
-    "other {app} window",
-    "other {app}",
-    category="window",
-    help_text="Cycle focus between multiple windows of the same app",
-)
-def handle_focus_next_instance(context, app):
+def _cycle_app_instance(app, direction=1):
     windows = _list_windows()
+    if isinstance(windows, str):
+        return windows
     if not windows:
         return "No windows open"
 
@@ -152,11 +145,27 @@ def handle_focus_next_instance(context, app):
         (i for i, w in enumerate(matches) if w.get("focused", False)),
         -1,
     )
-    next_idx = (focused_idx + 1) % len(matches)
-    next_win = matches[next_idx]
-    friendly = _get_friendly_app_name(next_win.get("wmClass", app))
-    _mcp_client.call_tool("focus_window", {"window_id": next_win["id"]})
-    return f"Focused next {friendly} window"
+    target_idx = (focused_idx + direction) % len(matches)
+    target_win = matches[target_idx]
+    friendly = _get_friendly_app_name(target_win.get("wmClass", app))
+    _mcp_client.call_tool("focus_window", {"window_id": target_win["id"]})
+    label = "next" if direction == 1 else "previous"
+    return f"Focused {label} {friendly} window"
+
+
+_INSTANCE_DIRECTIONS = {"next": 1, "other": 1, "previous": -1}
+
+
+@step(
+    "focus {direction} {app}",
+    "{direction} {app} window",
+    "{direction} {app}",
+    category="window",
+    help_text="Cycle focus between multiple windows of the same app",
+)
+def handle_focus_instance(context, direction, app):
+    d = _INSTANCE_DIRECTIONS.get(direction.lower(), 1)
+    return _cycle_app_instance(app, d)
 
 
 @step(
