@@ -567,39 +567,14 @@ def _move_to_monitor(app_name, monitor_target):
 
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", ""))
-    current_monitor = target.get("monitor", 0)
 
-    try:
-        mon_result = _mcp_client.call_tool("get_monitors", {})
-        monitors = json.loads(mon_result)
-    except Exception:
-        return "Could not get monitor information"
-
-    if len(monitors) < 2:
-        return "Only one monitor detected"
-
-    if monitor_target == "other":
-        dest = next((m for m in monitors if m["index"] != current_monitor), None)
-    else:
-        dest_index = int(monitor_target) - 1
-        dest = next((m for m in monitors if m["index"] == dest_index), None)
-
-    if not dest:
-        return f"Monitor {monitor_target} not found"
-
-    dest_x = dest["x"] + (dest["width"] - target["width"]) // 2
-    dest_y = dest["y"] + (dest["height"] - target["height"]) // 2
-    _mcp_client.call_tool(
-        "move_resize_window",
-        {
-            "window_id": window_id,
-            "x": dest_x,
-            "y": dest_y,
-            "width": target["width"],
-            "height": target["height"],
-        },
+    result = _mcp_client.call_tool(
+        "move_window_to_monitor",
+        {"window_id": window_id, "monitor": monitor_target},
     )
-    return f"Moved {friendly} to monitor {dest['index'] + 1}"
+    if result.startswith("Error"):
+        return result
+    return f"Moved {friendly} to monitor {monitor_target}"
 
 
 @step(
@@ -627,7 +602,9 @@ def handle_move_focused_to_other_monitor(context):
 
 @step(
     "move {app} to monitor {n:d}",
+    "move {app} to the monitor {n:d}",
     "send {app} to monitor {n:d}",
+    "send {app} to the monitor {n:d}",
     category="window",
     help_text="Move an application to a specific monitor",
 )
@@ -637,8 +614,11 @@ def handle_move_to_monitor_n(context, app, n):
 
 @step(
     "move to monitor {n:d}",
+    "move to the monitor {n:d}",
     "move window to monitor {n:d}",
+    "move window to the monitor {n:d}",
     "send to monitor {n:d}",
+    "send to the monitor {n:d}",
     category="window",
     help_text="Move the focused window to a specific monitor",
 )
@@ -646,12 +626,23 @@ def handle_move_focused_to_monitor_n(context, n):
     return _move_to_monitor(None, str(n))
 
 
-_ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4}
+_ORDINALS = {
+    "first": 1,
+    "primary": 1,
+    "main": 1,
+    "second": 2,
+    "secondary": 2,
+    "external": 2,
+    "third": 3,
+    "fourth": 4,
+}
 
 
 @step(
     "move {app} to the {ordinal} monitor",
+    "move {app} to {ordinal} monitor",
     "send {app} to the {ordinal} monitor",
+    "send {app} to {ordinal} monitor",
     category="window",
     help_text="Move an application to a monitor by ordinal name",
 )
@@ -664,8 +655,11 @@ def handle_move_to_monitor_ordinal(context, app, ordinal):
 
 @step(
     "move to the {ordinal} monitor",
+    "move to {ordinal} monitor",
     "move window to the {ordinal} monitor",
+    "move window to {ordinal} monitor",
     "send to the {ordinal} monitor",
+    "send to {ordinal} monitor",
     category="window",
     help_text="Move the focused window to a monitor by ordinal name",
 )
