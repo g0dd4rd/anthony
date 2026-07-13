@@ -40,16 +40,26 @@ def _send_key_via_mcp(keys):
 def _list_windows():
     result = _mcp_client.call_tool("list_windows", {})
     if result.startswith("Error"):
-        return None
+        return result
     return json.loads(result)
 
 
 def _find_window(app_name):
     windows = _list_windows()
+    if isinstance(windows, str):
+        return None, windows
     if not windows:
         return None, None
     target = _smart_match_window(app_name, windows)
     return target, windows
+
+
+def _check_find_result(target, windows_or_error, app_name):
+    if isinstance(windows_or_error, str):
+        return windows_or_error
+    if not target:
+        return f"No window found matching '{app_name}'"
+    return None
 
 
 def _verify_window_state(window_id, expected):
@@ -157,9 +167,10 @@ def handle_focus_next_instance(context, app):
     help_text="Switch to or focus an application window",
 )
 def handle_focus(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", app))
     _mcp_client.call_tool("focus_window", {"window_id": window_id})
@@ -236,9 +247,10 @@ def handle_close_focused(context):
     help_text="Close an application window",
 )
 def handle_close(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     wm_class = target.get("wmClass", app)
     friendly = _get_friendly_app_name(wm_class)
@@ -285,9 +297,10 @@ def handle_minimize_focused(context):
 
 @step("minimize {app}", "hide {app}", category="window", help_text="Minimize an application window")
 def handle_minimize(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", app))
     _mcp_client.call_tool("minimize_window", {"window_id": window_id})
@@ -326,9 +339,10 @@ def handle_maximize_focused(context):
 
 @step("maximize {app}", category="window", help_text="Maximize an application window")
 def handle_maximize(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", app))
 
@@ -374,9 +388,10 @@ def handle_restore_focused(context):
     help_text="Restore a minimized or maximized window",
 )
 def handle_restore(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", app))
     is_maximized = target.get("maximized", False)
@@ -403,6 +418,8 @@ def handle_restore(context, app):
 )
 def handle_list_windows(context):
     windows = _list_windows()
+    if isinstance(windows, str):
+        return windows
     if not windows:
         return "No windows are currently open."
     titles = [w.get("title", "Untitled") for w in windows[:10]]
@@ -447,9 +464,14 @@ def _tile_window(app_name, position):
         return f"Unknown position: {position}"
 
     if app_name:
-        target, _ = _find_window(app_name)
+        target, result = _find_window(app_name)
+        error = _check_find_result(target, result, app_name)
+        if error:
+            return error
     else:
         windows = _list_windows()
+        if isinstance(windows, str):
+            return windows
         target = next((w for w in (windows or []) if w.get("focused", False)), None)
 
     if not target:
@@ -510,9 +532,10 @@ def handle_tile_focused(context, position):
     help_text="Take a screenshot of a specific window",
 )
 def handle_window_screenshot(context, app):
-    target, _ = _find_window(app)
-    if not target:
-        return f"No window found matching '{app}'"
+    target, result = _find_window(app)
+    error = _check_find_result(target, result, app)
+    if error:
+        return error
     window_id = target["id"]
     friendly = _get_friendly_app_name(target.get("wmClass", app))
     result = _mcp_client.call_tool(
@@ -533,7 +556,10 @@ def _move_to_monitor(app_name, monitor_target):
     monitor_target: "other" or a 1-based monitor number.
     """
     if app_name:
-        target, _ = _find_window(app_name)
+        target, result = _find_window(app_name)
+        error = _check_find_result(target, result, app_name)
+        if error:
+            return error
     else:
         target = _get_focused_window()
     if not target:

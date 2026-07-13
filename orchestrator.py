@@ -507,6 +507,10 @@ class MCPClient:
             logger.debug(f"[MCP] {tool_name} error ({elapsed:.2f}s): {result}")
             return f"Error: {result}"
         logger.debug(f"[MCP] {tool_name} OK ({elapsed:.2f}s): {str(result)[:200]}")
+
+        if isinstance(result, str) and "automation is disabled" in result.lower():
+            log_and_print(f"[SYSTEM] ⚠️  {result}")
+
         return result
 
 
