@@ -15,11 +15,11 @@ def _call_vision(system_prompt, user_prompt, img_base64):
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": user_prompt},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:image/png;base64,{img_base64}"},
                     },
+                    {"type": "text", "text": user_prompt},
                 ],
             },
         ],
